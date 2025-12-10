@@ -31,8 +31,11 @@ export const setServerUrl = (url: string) => {
   if (!url) {
     localStorage.removeItem(SERVER_URL_KEY);
   } else {
-    // Remove trailing slash
-    const cleanUrl = url.replace(/\/$/, "");
+    // Remove trailing slash and ensure protocol
+    let cleanUrl = url.replace(/\/$/, "");
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+        cleanUrl = 'https://' + cleanUrl;
+    }
     localStorage.setItem(SERVER_URL_KEY, cleanUrl);
   }
 };
@@ -42,41 +45,6 @@ export const getServerUrl = (): string | null => {
 };
 
 // --- CRUD Operations (Hybrid: Cloud First -> Local Fallback) ---
-
-export const savePreset = async (userId: string, name: string, data: CommissionData): Promise<void> => {
-  const preset: Preset = {
-    id: `${userId}_${Date.now()}`,
-    userId,
-    name,
-    createdAt: Date.now(),
-    data
-  };
-
-  const serverUrl = getServerUrl();
-
-  // 1. Try Cloud Save
-  if (serverUrl) {
-    try {
-      const response = await fetch(`${serverUrl}/presets`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(preset),
-      });
-      if (!response.ok) throw new Error(`Server Error: ${response.status}`);
-      // If server save is successful, we can optionally save to local as cache, 
-      // but let's assume server is source of truth for now.
-      // We still save to local to keep them in sync if the user switches modes
-      await saveLocal(preset); 
-      return;
-    } catch (e) {
-      console.error("Cloud save failed, falling back to local:", e);
-      alert("⚠️ Cloud save failed. Saving locally only.");
-    }
-  }
-
-  // 2. Local Save (Default or Fallback)
-  await saveLocal(preset);
-};
 
 const saveLocal = async (preset: Preset) => {
   const db = await initDB();
@@ -89,8 +57,54 @@ const saveLocal = async (preset: Preset) => {
   });
 }
 
-export const getUserPresets = async (userId: string): Promise<Preset[]> => {
+export const savePreset = async (userId: string, name: string, data: CommissionData): Promise<'cloud' | 'local'> => {
+  const preset: Preset = {
+    id: `${userId}_${Date.now()}`,
+    userId,
+    name,
+    createdAt: Date.now(),
+    data
+  };
+
+  // 1. ALWAYS Save Local First (Safety)
+  try {
+    await saveLocal(preset);
+  } catch (e) {
+    console.error("Local DB Error:", e);
+    // If local DB fails, we might still try cloud, or throw. 
+    // Usually local DB shouldn't fail unless quota exceeded.
+  }
+
   const serverUrl = getServerUrl();
+
+  // 2. Try Cloud Save (Best Effort)
+  if (serverUrl) {
+    try {
+      const response = await fetch(`${serverUrl}/presets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preset),
+      });
+      
+      if (!response.ok) {
+        console.warn(`Cloud save responded with status: ${response.status}`);
+        return 'local';
+      }
+      
+      return 'cloud';
+    } catch (e) {
+      // Suppress annoying alerts, just warn in console
+      console.warn("Cloud save failed (network/cors), data exists locally.", e);
+      return 'local';
+    }
+  }
+
+  return 'local';
+};
+
+export const getUserPresets = async (userId: string): Promise<{ presets: Preset[], source: 'cloud' | 'local' }> => {
+  const serverUrl = getServerUrl();
+  let cloudPresets: Preset[] | null = null;
 
   // 1. Try Cloud Fetch
   if (serverUrl) {
@@ -99,18 +113,21 @@ export const getUserPresets = async (userId: string): Promise<Preset[]> => {
         method: 'GET',
         headers: { 'Accept': 'application/json' }
       });
-      if (!response.ok) throw new Error(`Server Error: ${response.status}`);
       
-      const data = await response.json();
-      // Expecting array of presets
-      if (Array.isArray(data)) {
-         data.sort((a: Preset, b: Preset) => b.createdAt - a.createdAt);
-         return data;
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+           data.sort((a: Preset, b: Preset) => b.createdAt - a.createdAt);
+           cloudPresets = data;
+        }
       }
     } catch (e) {
-      console.error("Cloud fetch failed, using local:", e);
-      // Fallthrough to local
+      console.warn("Cloud fetch failed, falling back to local.", e);
     }
+  }
+
+  if (cloudPresets) {
+      return { presets: cloudPresets, source: 'cloud' };
   }
 
   // 2. Local Fetch
@@ -126,7 +143,7 @@ export const getUserPresets = async (userId: string): Promise<Preset[]> => {
       request.onsuccess = () => {
         const results = request.result as Preset[];
         results.sort((a, b) => b.createdAt - a.createdAt);
-        resolve(results);
+        resolve({ presets: results, source: 'local' });
       };
     });
   } catch (err) {
@@ -137,19 +154,17 @@ export const getUserPresets = async (userId: string): Promise<Preset[]> => {
 export const deletePreset = async (id: string): Promise<void> => {
   const serverUrl = getServerUrl();
 
+  // Best effort cloud delete
   if (serverUrl) {
     try {
-      // Assuming DELETE /presets?id=XYZ or /presets/XYZ
-      const response = await fetch(`${serverUrl}/presets?id=${id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Delete failed on server');
+      await fetch(`${serverUrl}/presets?id=${id}`, { method: 'DELETE' });
     } catch (e) {
-      console.error("Cloud delete failed:", e);
-      alert("⚠️ Cloud delete failed. Check network.");
-      return; // Stop if cloud delete fails to prevent out-of-sync
+      console.warn("Cloud delete failed:", e);
+      // We continue to delete locally so the UI updates
     }
   }
 
-  // Also delete local
+  // Always delete local
   try {
     const db = await initDB();
     return new Promise((resolve, reject) => {
@@ -166,12 +181,10 @@ export const deletePreset = async (id: string): Promise<void> => {
 
 // Legacy
 export const savePresetToDB = async (key: string, data: any): Promise<void> => {
-   return savePreset('default', key, data);
+   await savePreset('default', key, data);
 };
 
 export const loadPresetFromDB = async (key: string): Promise<any> => {
-    // This function is largely deprecated by getUserPresets but kept for compatibility
-    // It only checks local DB
     try {
         const db = await initDB();
         return new Promise((resolve, reject) => {

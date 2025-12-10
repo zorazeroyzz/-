@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { CommissionData, PricingItem, ImageItem, Preset } from './types';
 import { DEFAULT_DATA, THEMES } from './constants';
@@ -117,6 +118,7 @@ const App: React.FC = () => {
   const [showServerSettings, setShowServerSettings] = useState(false);
   const [serverUrlInput, setServerUrlInput] = useState(getServerUrl() || '');
   const [currentServerUrl, setCurrentServerUrl] = useState<string | null>(getServerUrl());
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   // App State
   const [data, setData] = useState<CommissionData>(DEFAULT_DATA);
@@ -160,8 +162,14 @@ const App: React.FC = () => {
   const loadPresetsList = async () => {
     if (!currentUser) return;
     try {
-      const list = await getUserPresets(currentUser);
-      setPresets(list);
+      const result = await getUserPresets(currentUser);
+      setPresets(result.presets);
+      // If we have a server URL but source returned is local, it means offline
+      if (currentServerUrl && result.source === 'local') {
+          setIsOfflineMode(true);
+      } else {
+          setIsOfflineMode(false);
+      }
     } catch (e) {
       console.error("Failed to load presets", e);
     }
@@ -181,13 +189,15 @@ const App: React.FC = () => {
     localStorage.removeItem('dohna_user');
     setCurrentUser(null);
     setData(DEFAULT_DATA);
+    setIsOfflineMode(false);
   };
 
   const handleSaveServerSettings = () => {
     setServerUrl(serverUrlInput);
     setCurrentServerUrl(getServerUrl());
     setShowServerSettings(false);
-    alert(serverUrlInput ? "✅ SERVER CONNECTED" : "⚠️ LOCAL MODE ONLY");
+    setIsOfflineMode(false); // Reset to try connection again
+    alert(serverUrlInput ? "✅ SERVER CONFIG SAVED" : "⚠️ LOCAL MODE ENABLED");
   };
 
   const handleInputChange = (field: keyof CommissionData, value: any) => {
@@ -333,10 +343,22 @@ const App: React.FC = () => {
     if (!currentUser) return;
     const name = newPresetName.trim() || `Preset ${new Date().toLocaleTimeString()}`;
     try {
-      await savePreset(currentUser, name, data);
+      const status = await savePreset(currentUser, name, data);
       await loadPresetsList();
       setNewPresetName('');
-      alert('✅ 预设保存成功 / Preset Saved');
+      
+      if (status === 'cloud') {
+         alert('✅ 预设已同步至云端 / Saved to Cloud');
+         setIsOfflineMode(false);
+      } else {
+         // It was saved locally, but cloud failed
+         if (currentServerUrl) {
+            setIsOfflineMode(true);
+            alert('⚠️ 云端同步失败，已保存至本地 / Saved Locally (Cloud Offline)');
+         } else {
+            alert('✅ 预设已保存 (本地) / Saved Locally');
+         }
+      }
     } catch (e) {
       alert('保存失败 / Save Failed');
     }
@@ -564,7 +586,11 @@ const App: React.FC = () => {
                  <h2 className="text-2xl font-black italic text-cyan-400 flex items-center gap-2">
                    <FolderOpen size={24} /> 
                    DATA ARCHIVES
-                   {currentServerUrl && <span className="text-xs bg-cyan-900 text-cyan-200 px-2 py-0.5 rounded ml-2">CLOUD</span>}
+                   {currentServerUrl && (
+                      isOfflineMode 
+                      ? <span className="text-xs bg-red-900 text-red-200 px-2 py-0.5 rounded ml-2 flex items-center gap-1"><CloudOff size={10} /> OFFLINE</span>
+                      : <span className="text-xs bg-cyan-900 text-cyan-200 px-2 py-0.5 rounded ml-2 flex items-center gap-1"><Cloud size={10} /> CLOUD</span>
+                   )}
                  </h2>
                  <button onClick={() => setShowPresetManager(false)} className="text-gray-400 hover:text-white">
                    <XCircle size={24} />
@@ -664,7 +690,9 @@ const App: React.FC = () => {
                 <User size={10} /> 
                 USER: <span className="text-white">{currentUser}</span>
                 {currentServerUrl && (
-                   <span className="ml-2 text-[8px] bg-cyan-900 text-cyan-200 px-1 rounded border border-cyan-700">CLOUD ON</span>
+                   isOfflineMode 
+                   ? <span className="ml-2 text-[8px] bg-red-900 text-red-200 px-1 rounded border border-red-700">OFFLINE</span>
+                   : <span className="ml-2 text-[8px] bg-cyan-900 text-cyan-200 px-1 rounded border border-cyan-700">CLOUD ON</span>
                 )}
              </div>
            </div>
