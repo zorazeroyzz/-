@@ -4,6 +4,8 @@ import { DEFAULT_DATA, THEMES } from './constants';
 import PreviewCard from './components/PreviewCard';
 import { generateCoolSlogan, enhanceDescription } from './services/geminiService';
 import { toPng } from 'html-to-image';
+// @ts-ignore
+import jsQR from 'jsqr';
 import { 
   Download, 
   Upload, 
@@ -22,6 +24,68 @@ import {
   XCircle,
   Layout
 } from 'lucide-react';
+
+const processQrImage = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        if (!ctx) {
+          resolve(result);
+          return;
+        }
+        
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        
+        try {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          
+          if (code) {
+             // Calculate bounds with padding
+             const padding = 20; 
+             const loc = code.location;
+             
+             const minX = Math.floor(Math.min(loc.topLeftCorner.x, loc.bottomLeftCorner.x, loc.topRightCorner.x, loc.bottomRightCorner.x));
+             const maxX = Math.ceil(Math.max(loc.topLeftCorner.x, loc.bottomLeftCorner.x, loc.topRightCorner.x, loc.bottomRightCorner.x));
+             const minY = Math.floor(Math.min(loc.topLeftCorner.y, loc.topRightCorner.y, loc.bottomLeftCorner.y, loc.bottomRightCorner.y));
+             const maxY = Math.ceil(Math.max(loc.topLeftCorner.y, loc.topRightCorner.y, loc.bottomLeftCorner.y, loc.bottomRightCorner.y));
+
+             const cropX = Math.max(0, minX - padding);
+             const cropY = Math.max(0, minY - padding);
+             const cropW = Math.min(canvas.width - cropX, (maxX - minX) + padding * 2);
+             const cropH = Math.min(canvas.height - cropY, (maxY - minY) + padding * 2);
+
+             const cropCanvas = document.createElement('canvas');
+             cropCanvas.width = cropW;
+             cropCanvas.height = cropH;
+             const cropCtx = cropCanvas.getContext('2d');
+             
+             if (cropCtx) {
+               cropCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+               resolve(cropCanvas.toDataURL());
+               return;
+             }
+          }
+        } catch (err) {
+          console.error("QR Crop Error", err);
+        }
+        
+        // Fallback to original
+        resolve(result);
+      };
+      img.src = result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 const App: React.FC = () => {
   const [data, setData] = useState<CommissionData>(DEFAULT_DATA);
@@ -86,17 +150,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'qq' | 'wechat') => {
+  const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'qq' | 'wechat') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setData(prev => ({
-          ...prev,
-          [type === 'qq' ? 'qrCodeQQ' : 'qrCodeWeChat']: reader.result as string
-        }));
-      };
-      reader.readAsDataURL(file);
+      // Automatically crop QR code
+      const processedImage = await processQrImage(file);
+      setData(prev => ({
+        ...prev,
+        [type === 'qq' ? 'qrCodeQQ' : 'qrCodeWeChat']: processedImage
+      }));
     }
   };
 
