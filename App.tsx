@@ -1,9 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { CommissionData, PricingItem, ImageItem } from './types';
+import { CommissionData, PricingItem, ImageItem, Preset } from './types';
 import { DEFAULT_DATA, THEMES } from './constants';
 import PreviewCard from './components/PreviewCard';
 import { generateCoolSlogan, enhanceDescription } from './services/geminiService';
-import { savePresetToDB, loadPresetFromDB } from './services/storage';
+import { savePreset, getUserPresets, deletePreset, setServerUrl, getServerUrl } from './services/storage';
 import { toPng } from 'html-to-image';
 // @ts-ignore
 import jsQR from 'jsqr';
@@ -25,7 +25,15 @@ import {
   XCircle,
   Layout,
   Save,
-  FolderOpen
+  FolderOpen,
+  LogOut,
+  FileJson,
+  User,
+  ArrowRight,
+  Settings,
+  Cloud,
+  CloudOff,
+  Server
 } from 'lucide-react';
 
 const processQrImage = (file: File): Promise<string> => {
@@ -63,59 +71,37 @@ const processQrImage = (file: File): Promise<string> => {
           const code = qrScanner(imageData.data, imageData.width, imageData.height);
           
           if (code) {
-             console.log("QR Code detected at:", code.location);
-             
              const loc = code.location;
-             
-             // 1. Calculate the bounding box of the QR code content
              const minX = Math.min(loc.topLeftCorner.x, loc.bottomLeftCorner.x, loc.topRightCorner.x, loc.bottomRightCorner.x);
              const maxX = Math.max(loc.topLeftCorner.x, loc.bottomLeftCorner.x, loc.topRightCorner.x, loc.bottomRightCorner.x);
              const minY = Math.min(loc.topLeftCorner.y, loc.topRightCorner.y, loc.bottomLeftCorner.y, loc.bottomRightCorner.y);
              const maxY = Math.max(loc.topLeftCorner.y, loc.topRightCorner.y, loc.bottomLeftCorner.y, loc.bottomRightCorner.y);
 
-             // 2. Determine geometric properties
              const centerX = (minX + maxX) / 2;
              const centerY = (minY + maxY) / 2;
              const qrWidth = maxX - minX;
              const qrHeight = maxY - minY;
              
-             // 3. Force a square aspect ratio based on the largest dimension
              const baseSize = Math.max(qrWidth, qrHeight);
-             
-             // 4. Add comfortable padding (e.g., 40% total extra space = 20% each side) to ensure "Quiet Zone"
              const finalSize = Math.round(baseSize * 1.4);
 
-             // 5. Create the destination canvas
              const cropCanvas = document.createElement('canvas');
              cropCanvas.width = finalSize;
              cropCanvas.height = finalSize;
              const cropCtx = cropCanvas.getContext('2d');
              
              if (cropCtx) {
-               // 6. Fill with WHITE background. 
-               // This is crucial for QR codes (needs contrast) and handles cases where we crop outside source bounds.
                cropCtx.fillStyle = '#ffffff';
                cropCtx.fillRect(0, 0, finalSize, finalSize);
-               
-               // 7. Draw the image translated to the center
-               // Move origin to center of new canvas
                cropCtx.translate(finalSize / 2, finalSize / 2);
-               // Draw original image offset by the QR code's center
-               // This effectively centers the QR code in the new square canvas
                cropCtx.drawImage(canvas, -centerX, -centerY);
-               
-               console.log("QR Cropped & Centered Successfully");
                resolve(cropCanvas.toDataURL());
                return;
              }
-          } else {
-             console.log("No QR code found in image, using original.");
           }
         } catch (err) {
           console.error("QR Crop Error", err);
         }
-        
-        // Fallback to original
         resolve(result);
       };
       img.src = result;
@@ -125,11 +111,25 @@ const processQrImage = (file: File): Promise<string> => {
 };
 
 const App: React.FC = () => {
+  // Auth & Server State
+  const [currentUser, setCurrentUser] = useState<string | null>(localStorage.getItem('dohna_user'));
+  const [loginInput, setLoginInput] = useState('');
+  const [showServerSettings, setShowServerSettings] = useState(false);
+  const [serverUrlInput, setServerUrlInput] = useState(getServerUrl() || '');
+  const [currentServerUrl, setCurrentServerUrl] = useState<string | null>(getServerUrl());
+
+  // App State
   const [data, setData] = useState<CommissionData>(DEFAULT_DATA);
   const [isGenerating, setIsGenerating] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const [scaleFactor, setScaleFactor] = useState(1);
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
+  
+  // Preset Manager State
+  const [showPresetManager, setShowPresetManager] = useState(false);
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [newPresetName, setNewPresetName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Calculate approximate scale factor based on window width
   useEffect(() => {
@@ -140,8 +140,6 @@ const App: React.FC = () => {
       } else if (w >= 768) {
         setScaleFactor(0.60);
       } else {
-        // Mobile: Dynamic fit
-        // 750px is the card width. We leave 32px padding (16px each side)
         const availableWidth = w - 32;
         const scale = Math.min(0.5, availableWidth / 750);
         setScaleFactor(scale);
@@ -152,7 +150,45 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Fetch presets when user or manager visibility changes
+  useEffect(() => {
+    if (currentUser && showPresetManager) {
+      loadPresetsList();
+    }
+  }, [currentUser, showPresetManager]);
+
+  const loadPresetsList = async () => {
+    if (!currentUser) return;
+    try {
+      const list = await getUserPresets(currentUser);
+      setPresets(list);
+    } catch (e) {
+      console.error("Failed to load presets", e);
+    }
+  };
+
   // --- Handlers ---
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginInput.trim()) return;
+    const user = loginInput.trim().toUpperCase();
+    localStorage.setItem('dohna_user', user);
+    setCurrentUser(user);
+    setLoginInput('');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('dohna_user');
+    setCurrentUser(null);
+    setData(DEFAULT_DATA);
+  };
+
+  const handleSaveServerSettings = () => {
+    setServerUrl(serverUrlInput);
+    setCurrentServerUrl(getServerUrl());
+    setShowServerSettings(false);
+    alert(serverUrlInput ? "✅ SERVER CONNECTED" : "⚠️ LOCAL MODE ONLY");
+  };
 
   const handleInputChange = (field: keyof CommissionData, value: any) => {
     setData(prev => ({ ...prev, [field]: value }));
@@ -190,7 +226,6 @@ const App: React.FC = () => {
   const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'qq' | 'wechat') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      // Automatically crop QR code
       const processedImage = await processQrImage(file);
       setData(prev => ({
         ...prev,
@@ -213,7 +248,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Helper for generic image uploads
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, targetList: 'exhibitionImages' | 'mainImages') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -282,7 +316,6 @@ const App: React.FC = () => {
   };
 
   // --- AI Actions ---
-
   const generateSlogan = async () => {
     setIsGenerating(true);
     const slogan = await generateCoolSlogan(data.photographerName, data.tags);
@@ -295,50 +328,75 @@ const App: React.FC = () => {
     updatePricing(id, 'desc', newText);
   };
 
-  // --- Preset Actions (IndexedDB) ---
-
-  const savePreset = async () => {
+  // --- Preset Manager Functions ---
+  const handleSavePreset = async () => {
+    if (!currentUser) return;
+    const name = newPresetName.trim() || `Preset ${new Date().toLocaleTimeString()}`;
     try {
-      await savePresetToDB('current_preset', data);
-      alert('✅ 预设已保存 (IndexedDB) / PRESET SAVED');
+      await savePreset(currentUser, name, data);
+      await loadPresetsList();
+      setNewPresetName('');
+      alert('✅ 预设保存成功 / Preset Saved');
     } catch (e) {
-      console.error(e);
-      alert('❌ 保存失败 / SAVE FAILED: ' + (e as Error).message);
+      alert('保存失败 / Save Failed');
     }
   };
 
-  const loadPreset = async () => {
-    try {
-      const preset = await loadPresetFromDB('current_preset');
-      if (preset) {
-        if (window.confirm('⚠️ 确定要读取存档覆盖当前内容吗？\nOverwrite current data with saved preset?')) {
-          // Merge with DEFAULT_DATA to ensure any new fields added in code updates are present
-          setData({ ...DEFAULT_DATA, ...preset });
-          alert('📂 预设已读取 / PRESET LOADED');
+  const handleLoadPreset = (presetData: CommissionData) => {
+    if (window.confirm('Load this preset? Unsaved changes will be lost.')) {
+      setData({ ...DEFAULT_DATA, ...presetData });
+      setShowPresetManager(false);
+    }
+  };
+
+  const handleDeletePreset = async (id: string) => {
+    if (window.confirm('Delete this preset permanently?')) {
+      await deletePreset(id);
+      await loadPresetsList();
+    }
+  };
+
+  const handleExportJSON = (preset: Preset) => {
+    const jsonString = JSON.stringify(preset.data);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${preset.name.replace(/\s+/g, '_')}_dohna_backup.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const importedData = JSON.parse(event.target?.result as string);
+          // Basic validation
+          if (importedData.photographerName !== undefined) {
+             if (currentUser) {
+                await savePreset(currentUser, `Imported ${new Date().toLocaleTimeString()}`, importedData);
+                await loadPresetsList();
+                alert('✅ 导入成功 / Import Successful');
+             }
+          } else {
+             alert('❌ 无效的文件 / Invalid File');
+          }
+        } catch (err) {
+          alert('❌ 读取错误 / Error Reading File');
         }
-      } else {
-        alert('❌ 没有找到存档 / NO PRESET FOUND');
-      }
-    } catch (e) {
-      console.error(e);
-      alert('❌ 读取失败 / LOAD FAILED');
+      };
+      reader.readAsText(file);
     }
   };
+
 
   // --- Export ---
-
   const handleExport = useCallback(async () => {
-    // Determine which element to capture.
-    // If we are in 'editor' mode on mobile, the previewRef might be hidden (display: none),
-    // causing html-to-image to fail.
-    // However, we are swapping visibility classes.
-    // If the user clicks export on mobile, they should ideally be in preview mode or we force it.
-    
     if (window.innerWidth < 768 && activeTab === 'editor') {
-       // If on mobile and in editor, switch to preview first to ensure rendering?
-       // Actually, we can just alert or switch tab. But let's assume the user knows or we handle visibility.
        setActiveTab('preview');
-       // Give it a tick to render
        setTimeout(() => {
           if (previewRef.current) capture();
        }, 100);
@@ -356,7 +414,7 @@ const App: React.FC = () => {
         link.click();
       } catch (err) {
         console.error('Export failed', err);
-        alert('Failed to export image. Please try again.');
+        alert('Failed to export image.');
       }
     }
   }, [data.photographerName, activeTab]);
@@ -399,11 +457,201 @@ const App: React.FC = () => {
     </div>
   );
 
+  // --- LOGIN SCREEN ---
+  if (!currentUser) {
+    return (
+      <div className="h-screen w-full bg-black flex items-center justify-center font-sans overflow-hidden relative">
+         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#330033_0%,_#000000_100%)] opacity-50"></div>
+         <div className="z-10 bg-neutral-900 border-2 border-pink-500 p-8 w-[90%] max-w-md shadow-[0_0_20px_rgba(255,0,128,0.3)] relative group">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-black px-4 text-pink-500 font-black italic tracking-widest text-xl border-l-2 border-r-2 border-pink-500">
+              DOHNA SYSTEM
+            </div>
+            
+            <h2 className="text-white text-3xl font-black italic mb-6 text-center mt-4">
+              IDENTITY VERIFICATION
+            </h2>
+            
+            {!showServerSettings ? (
+              <form onSubmit={handleLogin} className="space-y-6">
+                 <div>
+                    <label className="block text-xs text-gray-400 font-mono mb-2 uppercase">Input Codename // 代号</label>
+                    <input 
+                      type="text" 
+                      value={loginInput}
+                      onChange={e => setLoginInput(e.target.value)}
+                      className="w-full bg-black border-b-2 border-gray-600 text-white p-3 text-xl font-bold focus:border-pink-500 focus:outline-none placeholder-gray-700 text-center uppercase tracking-widest"
+                      placeholder="ENTER ID..."
+                      autoFocus
+                    />
+                 </div>
+                 <button 
+                   type="submit" 
+                   className="w-full bg-pink-600 hover:bg-pink-500 text-white font-black italic text-xl py-3 border-2 border-white shadow-[4px_4px_0px_white] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                 >
+                   LOGIN <ArrowRight size={24} />
+                 </button>
+                 
+                 <div className="text-center pt-4 border-t border-gray-800">
+                    <button 
+                       type="button" 
+                       onClick={() => setShowServerSettings(true)}
+                       className="text-gray-500 hover:text-cyan-400 text-xs font-mono flex items-center justify-center gap-2 w-full"
+                    >
+                       <Settings size={12} /> 
+                       {currentServerUrl ? "SERVER: CONNECTED" : "SERVER: LOCAL ONLY"}
+                    </button>
+                 </div>
+              </form>
+            ) : (
+              <div className="space-y-6 animate-fadeIn">
+                 <div>
+                    <label className="block text-xs text-cyan-400 font-mono mb-2 uppercase flex items-center gap-2">
+                       <Server size={14} /> Server API Endpoint
+                    </label>
+                    <input 
+                      type="text" 
+                      value={serverUrlInput}
+                      onChange={e => setServerUrlInput(e.target.value)}
+                      className="w-full bg-black border-b-2 border-cyan-600 text-white p-2 text-sm font-mono focus:border-cyan-400 focus:outline-none placeholder-gray-700"
+                      placeholder="https://your-app.vercel.app/api"
+                    />
+                    <p className="text-[10px] text-gray-500 mt-2">
+                       Set your backend API URL to enable cross-device sync.
+                       Leave empty for offline mode.
+                    </p>
+                 </div>
+                 <div className="flex gap-2">
+                    <button 
+                      type="button" 
+                      onClick={() => setShowServerSettings(false)}
+                      className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 border border-gray-600"
+                    >
+                      CANCEL
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={handleSaveServerSettings}
+                      className="flex-1 bg-cyan-700 hover:bg-cyan-600 text-white font-bold py-2 border border-cyan-400"
+                    >
+                      SAVE CONFIG
+                    </button>
+                 </div>
+              </div>
+            )}
+            
+            <div className="mt-6 text-[10px] text-gray-500 text-center font-mono flex justify-center gap-4">
+               <span>SECURE CONNECTION</span>
+               {currentServerUrl ? (
+                  <span className="text-cyan-500 flex items-center gap-1"><Cloud size={10} /> SYNC ON</span>
+               ) : (
+                  <span className="text-gray-600 flex items-center gap-1"><CloudOff size={10} /> OFFLINE</span>
+               )}
+            </div>
+         </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col md:flex-row text-white overflow-hidden font-sans bg-neutral-900">
       
+      {/* --- PRESET MANAGER MODAL --- */}
+      {showPresetManager && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+           <div className="bg-neutral-900 border-2 border-cyan-500 w-full max-w-2xl h-[80vh] flex flex-col shadow-[0_0_30px_rgba(0,255,255,0.2)]">
+              {/* Modal Header */}
+              <div className="bg-black p-4 border-b-2 border-cyan-500 flex justify-between items-center">
+                 <h2 className="text-2xl font-black italic text-cyan-400 flex items-center gap-2">
+                   <FolderOpen size={24} /> 
+                   DATA ARCHIVES
+                   {currentServerUrl && <span className="text-xs bg-cyan-900 text-cyan-200 px-2 py-0.5 rounded ml-2">CLOUD</span>}
+                 </h2>
+                 <button onClick={() => setShowPresetManager(false)} className="text-gray-400 hover:text-white">
+                   <XCircle size={24} />
+                 </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-6 bg-neutral-900/50">
+                 
+                 {/* Save New */}
+                 <div className="mb-8 bg-neutral-800 p-4 border border-cyan-500/30">
+                    <label className="text-xs text-gray-400 font-mono mb-2 block">SAVE CURRENT STATE AS NEW PRESET</label>
+                    <div className="flex gap-2">
+                       <input 
+                         type="text" 
+                         value={newPresetName}
+                         onChange={e => setNewPresetName(e.target.value)}
+                         placeholder="Enter Preset Name (e.g. Pink Theme V1)"
+                         className="flex-1 bg-black border border-gray-600 p-2 text-white focus:border-cyan-500 focus:outline-none"
+                       />
+                       <button onClick={handleSavePreset} className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 font-bold flex items-center gap-2">
+                          <Save size={16} /> SAVE
+                       </button>
+                    </div>
+                 </div>
+
+                 {/* Import */}
+                 <div className="mb-8 flex items-center justify-between bg-neutral-800 p-4 border border-dashed border-gray-600">
+                    <div className="flex items-center gap-3">
+                       <FileJson className="text-yellow-400" size={24} />
+                       <div>
+                          <div className="font-bold text-sm">IMPORT FROM FILE</div>
+                          <div className="text-[10px] text-gray-500">Restore data from .json backup</div>
+                       </div>
+                    </div>
+                    <label className="cursor-pointer bg-neutral-700 hover:bg-neutral-600 text-white px-3 py-1 text-xs font-bold border border-gray-500 flex items-center gap-2">
+                       <Upload size={14} /> SELECT FILE
+                       <input type="file" ref={fileInputRef} onChange={handleImportJSON} accept=".json" className="hidden" />
+                    </label>
+                 </div>
+
+                 {/* List */}
+                 <div className="space-y-3">
+                    <label className="text-xs text-gray-400 font-mono block mb-2 border-b border-gray-700 pb-1">SAVED ARCHIVES ({presets.length})</label>
+                    {presets.length === 0 ? (
+                       <div className="text-center text-gray-600 py-8 italic">NO DATA FOUND</div>
+                    ) : (
+                       presets.map(preset => (
+                          <div key={preset.id} className="bg-black border border-gray-700 p-3 flex justify-between items-center group hover:border-cyan-500 transition-colors">
+                             <div>
+                                <div className="font-bold text-white text-lg">{preset.name}</div>
+                                <div className="text-[10px] text-gray-500 font-mono">
+                                   {new Date(preset.createdAt).toLocaleString()}
+                                </div>
+                             </div>
+                             <div className="flex items-center gap-2">
+                                <button 
+                                   onClick={() => handleExportJSON(preset)}
+                                   className="p-2 text-yellow-500 hover:bg-neutral-800 rounded"
+                                   title="Export JSON"
+                                >
+                                   <Download size={18} />
+                                </button>
+                                <button 
+                                   onClick={() => handleDeletePreset(preset.id)}
+                                   className="p-2 text-red-500 hover:bg-neutral-800 rounded"
+                                   title="Delete"
+                                >
+                                   <Trash2 size={18} />
+                                </button>
+                                <button 
+                                   onClick={() => handleLoadPreset(preset.data)}
+                                   className="px-4 py-1 bg-neutral-800 hover:bg-cyan-600 text-cyan-400 hover:text-white border border-cyan-500 font-bold text-xs"
+                                >
+                                   LOAD
+                                </button>
+                             </div>
+                          </div>
+                       ))
+                    )}
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
       {/* --- Sidebar Editor (Left) --- */}
-      {/* Hidden on mobile if activeTab is 'preview', otherwise visible. Always visible on md+ */}
       <div className={`
           ${activeTab === 'editor' ? 'flex' : 'hidden'} 
           md:flex w-full md:w-[450px] bg-neutral-900 border-r-4 border-black flex-col 
@@ -412,16 +660,25 @@ const App: React.FC = () => {
         <div className="p-6 bg-black text-white border-b-4 border-neutral-800 flex justify-between items-center shrink-0">
            <div>
              <h1 className="text-2xl font-black italic text-pink-500 tracking-tighter">DOHNA-CN</h1>
-             <p className="text-xs text-gray-500 font-mono">CN 2D PHOTO COMMISSION GEN</p>
+             <div className="flex items-center gap-1 text-[10px] text-gray-500 font-mono">
+                <User size={10} /> 
+                USER: <span className="text-white">{currentUser}</span>
+                {currentServerUrl && (
+                   <span className="ml-2 text-[8px] bg-cyan-900 text-cyan-200 px-1 rounded border border-cyan-700">CLOUD ON</span>
+                )}
+             </div>
            </div>
            
            <div className="flex items-center gap-2">
-               <button onClick={loadPreset} className="bg-neutral-800 hover:bg-neutral-700 text-white p-2 border border-gray-600 transition-all" title="读取预设 Load">
-                 <FolderOpen size={18} />
+               <button onClick={() => setShowPresetManager(true)} className="bg-neutral-800 hover:bg-neutral-700 text-white p-2 border border-gray-600 transition-all text-xs flex items-center gap-1" title="Manage Presets">
+                 <FolderOpen size={16} /> 
+                 <span className="hidden lg:inline">ARCHIVES</span>
                </button>
-               <button onClick={savePreset} className="bg-neutral-800 hover:bg-neutral-700 text-white p-2 border border-gray-600 transition-all" title="保存预设 Save">
-                 <Save size={18} />
+               
+               <button onClick={handleLogout} className="bg-neutral-800 hover:bg-red-900 text-red-500 p-2 border border-gray-600 transition-all" title="Logout">
+                 <LogOut size={16} />
                </button>
+
                {/* Desktop Export Button */}
                <button onClick={handleExport} className="hidden md:flex bg-pink-600 hover:bg-pink-500 text-white p-3 border-2 border-white shadow-[4px_4px_0px_white] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all">
                  <Download size={20} />
@@ -746,7 +1003,6 @@ const App: React.FC = () => {
       </div>
 
       {/* --- Main Preview Area (Right) --- */}
-      {/* Hidden on mobile if activeTab is 'preview', otherwise visible. Always visible on md+ */}
       <div className={`
           ${activeTab === 'preview' ? 'flex' : 'hidden'}
           md:flex flex-1 bg-neutral-900 relative overflow-y-auto custom-scrollbar items-start justify-center p-4 md:p-8

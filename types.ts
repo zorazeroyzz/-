@@ -1,3 +1,4 @@
+
 export interface PricingItem {
   id: string;
   title: string;
@@ -58,6 +59,14 @@ export interface CommissionData {
   spacingPortfolio: number;
   spacingPricing: number;
   spacingNotice: number;
+}
+
+export interface Preset {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: number;
+  data: CommissionData;
 }
 
 export type ThemeColors = {
