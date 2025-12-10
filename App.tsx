@@ -3,6 +3,7 @@ import { CommissionData, PricingItem, ImageItem } from './types';
 import { DEFAULT_DATA, THEMES } from './constants';
 import PreviewCard from './components/PreviewCard';
 import { generateCoolSlogan, enhanceDescription } from './services/geminiService';
+import { savePresetToDB, loadPresetFromDB } from './services/storage';
 import { toPng } from 'html-to-image';
 // @ts-ignore
 import jsQR from 'jsqr';
@@ -294,35 +295,33 @@ const App: React.FC = () => {
     updatePricing(id, 'desc', newText);
   };
 
-  // --- Preset Actions ---
+  // --- Preset Actions (IndexedDB) ---
 
-  const savePreset = () => {
+  const savePreset = async () => {
     try {
-      const preset = JSON.stringify(data);
-      localStorage.setItem('dohna_commission_preset', preset);
-      alert('✅ 预设已保存 / PRESET SAVED');
+      await savePresetToDB('current_preset', data);
+      alert('✅ 预设已保存 (IndexedDB) / PRESET SAVED');
     } catch (e) {
       console.error(e);
-      alert('❌ 保存失败 / SAVE FAILED');
+      alert('❌ 保存失败 / SAVE FAILED: ' + (e as Error).message);
     }
   };
 
-  const loadPreset = () => {
-    const preset = localStorage.getItem('dohna_commission_preset');
-    if (preset) {
-      if (window.confirm('⚠️ 确定要读取存档覆盖当前内容吗？\nOverwrite current data with saved preset?')) {
-        try {
-          const parsed = JSON.parse(preset);
+  const loadPreset = async () => {
+    try {
+      const preset = await loadPresetFromDB('current_preset');
+      if (preset) {
+        if (window.confirm('⚠️ 确定要读取存档覆盖当前内容吗？\nOverwrite current data with saved preset?')) {
           // Merge with DEFAULT_DATA to ensure any new fields added in code updates are present
-          setData({ ...DEFAULT_DATA, ...parsed });
+          setData({ ...DEFAULT_DATA, ...preset });
           alert('📂 预设已读取 / PRESET LOADED');
-        } catch (e) {
-          console.error(e);
-          alert('❌ 读取失败 / LOAD FAILED');
         }
+      } else {
+        alert('❌ 没有找到存档 / NO PRESET FOUND');
       }
-    } else {
-      alert('❌ 没有找到存档 / NO PRESET FOUND');
+    } catch (e) {
+      console.error(e);
+      alert('❌ 读取失败 / LOAD FAILED');
     }
   };
 
