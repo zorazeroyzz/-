@@ -354,7 +354,7 @@ const App: React.FC = () => {
          // It was saved locally, but cloud failed
          if (currentServerUrl) {
             setIsOfflineMode(true);
-            alert('⚠️ 云端同步失败，已保存至本地 / Saved Locally (Cloud Offline)');
+            alert('✅ 已保存至本地 (离线模式) / Saved Locally (Offline Mode)');
          } else {
             alert('✅ 预设已保存 (本地) / Saved Locally');
          }

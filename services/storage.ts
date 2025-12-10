@@ -70,9 +70,7 @@ export const savePreset = async (userId: string, name: string, data: CommissionD
   try {
     await saveLocal(preset);
   } catch (e) {
-    console.error("Local DB Error:", e);
-    // If local DB fails, we might still try cloud, or throw. 
-    // Usually local DB shouldn't fail unless quota exceeded.
+    // Silent catch for local DB errors
   }
 
   const serverUrl = getServerUrl();
@@ -87,14 +85,12 @@ export const savePreset = async (userId: string, name: string, data: CommissionD
       });
       
       if (!response.ok) {
-        console.warn(`Cloud save responded with status: ${response.status}`);
         return 'local';
       }
       
       return 'cloud';
     } catch (e) {
-      // Suppress annoying alerts, just warn in console
-      console.warn("Cloud save failed (network/cors), data exists locally.", e);
+      // Silent catch for network errors
       return 'local';
     }
   }
@@ -122,7 +118,7 @@ export const getUserPresets = async (userId: string): Promise<{ presets: Preset[
         }
       }
     } catch (e) {
-      console.warn("Cloud fetch failed, falling back to local.", e);
+      // Silent catch
     }
   }
 
@@ -159,8 +155,7 @@ export const deletePreset = async (id: string): Promise<void> => {
     try {
       await fetch(`${serverUrl}/presets?id=${id}`, { method: 'DELETE' });
     } catch (e) {
-      console.warn("Cloud delete failed:", e);
-      // We continue to delete locally so the UI updates
+      // Silent catch
     }
   }
 
