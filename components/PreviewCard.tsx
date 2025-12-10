@@ -50,20 +50,41 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
     });
   }, [item.x, item.y, item.scale]);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
+    // Stop propagation to prevent parent handlers
     e.stopPropagation();
+    
+    // On touch, prevent default to stop browser scrolling/zooming gestures while dragging
+    if (e.type === 'touchstart' && e.cancelable) {
+       // Note: We might want to allow default if we are not strictly dragging, 
+       // but for this UI, touching the image usually means drag intent.
+       // However, to be safe, we often rely on the move event to prevent default.
+       // But preventing start is sometimes needed for older browsers or specific behaviors.
+    }
+
     setIsDragging(true);
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+
+    dragStartRef.current = { x: clientX, y: clientY };
     initialPosRef.current = { x: localState.x, y: localState.y };
   };
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMove = (e: MouseEvent | TouchEvent) => {
       if (!isDragging || !dragStartRef.current || !initialPosRef.current) return;
       
-      const dx = (e.clientX - dragStartRef.current.x) / scaleFactor;
-      const dy = (e.clientY - dragStartRef.current.y) / scaleFactor;
+      // Prevent scrolling on mobile while dragging
+      if (e.type === 'touchmove' && e.cancelable) {
+        e.preventDefault();
+      }
+      
+      const clientX = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+      const clientY = 'touches' in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
+
+      const dx = (clientX - dragStartRef.current.x) / scaleFactor;
+      const dy = (clientY - dragStartRef.current.y) / scaleFactor;
 
       // Update local state only (FAST)
       setLocalState(prev => ({
@@ -73,7 +94,7 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
       }));
     };
 
-    const handleMouseUp = () => {
+    const handleEnd = () => {
       if (isDragging) {
         setIsDragging(false);
         // Commit changes to global state (SLOW but only once)
@@ -85,12 +106,16 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
     };
 
     if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('mousemove', handleMove);
+      window.addEventListener('mouseup', handleEnd);
+      window.addEventListener('touchmove', handleMove, { passive: false });
+      window.addEventListener('touchend', handleEnd);
     }
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
     };
   }, [isDragging, scaleFactor, listType, index, onUpdate, localState.x, localState.y]);
 
@@ -139,6 +164,7 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
                 onTouchEnd={handleSliderCommit}
                 className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-pink-500"
                 onMouseDown={(e) => e.stopPropagation()} 
+                onTouchStart={(e) => e.stopPropagation()} 
               />
            </div>
         </div>
@@ -153,7 +179,8 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
                 transform: `translate(${localState.x}px, ${localState.y}px) scale(${localState.scale})`,
                 transition: isDragging ? 'none' : 'transform 0.1s ease-out'
               }}
-              onMouseDown={handleMouseDown}
+              onMouseDown={handleStart}
+              onTouchStart={handleStart}
               draggable={false}
             />
         </div>
@@ -164,18 +191,23 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
 const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, onPosChange, onImageUpdate, onScaleChange }) => {
   const theme = THEMES[data.themeColor];
   
-  // Header drag logic remains mostly same but could also be optimized. 
-  // Given low count of header items, keeping it simple for now, but adding stopPropagation to avoid conflicts.
-  
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const dragStartRef = useRef<{x: number, y: number} | null>(null);
   const initialPosRef = useRef<{x: number, y: number} | null>(null);
 
-  const handleHeaderMouseDown = (e: React.MouseEvent, id: string) => {
-    e.preventDefault();
+  const handleHeaderStart = (e: React.MouseEvent | React.TouchEvent, id: string) => {
     e.stopPropagation();
+    if (e.type === 'touchstart' && e.cancelable) {
+      // e.preventDefault(); 
+      // Often better not to preventDefault on start for header items unless we are sure, 
+      // but for consistency with drag:
+    }
+    
     setDraggedId(id);
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+
+    dragStartRef.current = { x: clientX, y: clientY };
     
     let startPos = { x: 0, y: 0 };
     if (id === 'avatar') startPos = data.avatarPosition;
@@ -189,32 +221,42 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
   };
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMove = (e: MouseEvent | TouchEvent) => {
       if (!draggedId || !dragStartRef.current || !initialPosRef.current) return;
       
-      const dx = (e.clientX - dragStartRef.current.x) / scaleFactor;
-      const dy = (e.clientY - dragStartRef.current.y) / scaleFactor;
+      if (e.type === 'touchmove' && e.cancelable) {
+        e.preventDefault();
+      }
+
+      const clientX = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+      const clientY = 'touches' in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
+
+      const dx = (clientX - dragStartRef.current.x) / scaleFactor;
+      const dy = (clientY - dragStartRef.current.y) / scaleFactor;
 
       const newPos = {
-        x: initialPosRef.current.x + dx,
-        y: initialPosRef.current.y + dy
+        x: initialPosRef.current!.x + dx,
+        y: initialPosRef.current!.y + dy
       };
       
-      // We still update parent directly for header items as there are few of them
       onPosChange(draggedId, newPos);
     };
 
-    const handleMouseUp = () => {
+    const handleEnd = () => {
       setDraggedId(null);
     };
 
     if (draggedId) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('mousemove', handleMove);
+      window.addEventListener('mouseup', handleEnd);
+      window.addEventListener('touchmove', handleMove, { passive: false });
+      window.addEventListener('touchend', handleEnd);
     }
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
     };
   }, [draggedId, scaleFactor, onPosChange]);
 
@@ -283,9 +325,9 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                <div 
                  className="flex flex-col gap-1 cursor-move group relative z-30"
                  style={{ transform: `translate(${data.statusPosition.x}px, ${data.statusPosition.y}px) scale(${data.statusScale})` }}
-                 onMouseDown={(e) => handleHeaderMouseDown(e, 'status')}
+                 onMouseDown={(e) => handleHeaderStart(e, 'status')}
+                 onTouchStart={(e) => handleHeaderStart(e, 'status')}
                  onWheel={(e) => {
-                    // Keep wheel for header elements but protect propagation
                     e.stopPropagation();
                     e.preventDefault();
                     const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -305,7 +347,8 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                <div 
                   className="relative w-32 h-32 shrink-0 group z-20 cursor-move"
                   style={{ transform: `translate(${data.avatarPosition.x}px, ${data.avatarPosition.y}px) scale(${data.avatarScale})` }}
-                  onMouseDown={(e) => handleHeaderMouseDown(e, 'avatar')}
+                  onMouseDown={(e) => handleHeaderStart(e, 'avatar')}
+                  onTouchStart={(e) => handleHeaderStart(e, 'avatar')}
                   onWheel={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
@@ -336,7 +379,8 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
             <div 
               className="mt-2 relative cursor-move group w-fit z-30"
               style={{ transform: `translate(${data.titlePosition.x}px, ${data.titlePosition.y}px)` }}
-              onMouseDown={(e) => handleHeaderMouseDown(e, 'title')}
+              onMouseDown={(e) => handleHeaderStart(e, 'title')}
+              onTouchStart={(e) => handleHeaderStart(e, 'title')}
             >
                <div className="absolute -top-6 left-0 bg-pink-500 text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                   <Move size={8} className="inline mr-1"/>MOVE
@@ -354,7 +398,8 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
             <div 
               className="flex items-center gap-2 mt-2 cursor-move group w-fit relative z-30"
               style={{ transform: `translate(${data.sloganPosition.x}px, ${data.sloganPosition.y}px)` }}
-              onMouseDown={(e) => handleHeaderMouseDown(e, 'slogan')}
+              onMouseDown={(e) => handleHeaderStart(e, 'slogan')}
+              onTouchStart={(e) => handleHeaderStart(e, 'slogan')}
             >
               <div className="absolute -top-4 left-0 bg-pink-500 text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                   <Move size={8} className="inline mr-1"/>MOVE
@@ -369,7 +414,8 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
             <div 
               className="mt-4 cursor-move group relative w-fit z-30"
               style={{ transform: `translate(${data.tagsPosition.x}px, ${data.tagsPosition.y}px)` }}
-              onMouseDown={(e) => handleHeaderMouseDown(e, 'tags')}
+              onMouseDown={(e) => handleHeaderStart(e, 'tags')}
+              onTouchStart={(e) => handleHeaderStart(e, 'tags')}
             >
                <div className="absolute -top-4 left-0 bg-pink-500 text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                   <Move size={8} className="inline mr-1"/>MOVE
@@ -500,7 +546,8 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                                transform: `translate(${data.contactBackgroundPosition?.x || 0}px, ${data.contactBackgroundPosition?.y || 0}px) scale(${data.contactBackgroundScale})`,
                                opacity: data.contactBackgroundOpacity
                            }}
-                           onMouseDown={(e) => handleHeaderMouseDown(e, 'contactBg')}
+                           onMouseDown={(e) => handleHeaderStart(e, 'contactBg')}
+                           onTouchStart={(e) => handleHeaderStart(e, 'contactBg')}
                            draggable={false}
                         />
                      </div>
