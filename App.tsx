@@ -4,7 +4,7 @@ import { CommissionData, PricingItem, ImageItem, Preset } from './types';
 import { DEFAULT_DATA, THEMES } from './constants';
 import PreviewCard from './components/PreviewCard';
 import { generateCoolSlogan, enhanceDescription } from './services/geminiService';
-import { savePreset, getUserPresets, deletePreset, setServerUrl, getServerUrl } from './services/storage';
+import { savePreset, getUserPresets, deletePreset } from './services/storage';
 import { toPng } from 'html-to-image';
 // @ts-ignore
 import jsQR from 'jsqr';
@@ -16,7 +16,6 @@ import {
   Sparkles, 
   Palette, 
   RefreshCw,
-  FileText,
   Camera,
   Image as ImageIcon,
   QrCode,
@@ -24,17 +23,11 @@ import {
   EyeOff,
   MoveVertical,
   XCircle,
-  Layout,
   Save,
   FolderOpen,
-  LogOut,
   FileJson,
   User,
-  ArrowRight,
-  Settings,
-  Cloud,
-  CloudOff,
-  Server
+  Database
 } from 'lucide-react';
 
 const processQrImage = (file: File): Promise<string> => {
@@ -111,15 +104,9 @@ const processQrImage = (file: File): Promise<string> => {
   });
 };
 
-const App: React.FC = () => {
-  // Auth & Server State
-  const [currentUser, setCurrentUser] = useState<string | null>(localStorage.getItem('dohna_user'));
-  const [loginInput, setLoginInput] = useState('');
-  const [showServerSettings, setShowServerSettings] = useState(false);
-  const [serverUrlInput, setServerUrlInput] = useState(getServerUrl() || '');
-  const [currentServerUrl, setCurrentServerUrl] = useState<string | null>(getServerUrl());
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
+const LOCAL_USER_ID = 'local_user';
 
+const App: React.FC = () => {
   // App State
   const [data, setData] = useState<CommissionData>(DEFAULT_DATA);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -154,52 +141,21 @@ const App: React.FC = () => {
 
   // Fetch presets when user or manager visibility changes
   useEffect(() => {
-    if (currentUser && showPresetManager) {
+    if (showPresetManager) {
       loadPresetsList();
     }
-  }, [currentUser, showPresetManager]);
+  }, [showPresetManager]);
 
   const loadPresetsList = async () => {
-    if (!currentUser) return;
     try {
-      const result = await getUserPresets(currentUser);
-      setPresets(result.presets);
-      // If we have a server URL but source returned is local, it means offline
-      if (currentServerUrl && result.source === 'local') {
-          setIsOfflineMode(true);
-      } else {
-          setIsOfflineMode(false);
-      }
+      const results = await getUserPresets(LOCAL_USER_ID);
+      setPresets(results);
     } catch (e) {
       console.error("Failed to load presets", e);
     }
   };
 
   // --- Handlers ---
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginInput.trim()) return;
-    const user = loginInput.trim().toUpperCase();
-    localStorage.setItem('dohna_user', user);
-    setCurrentUser(user);
-    setLoginInput('');
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('dohna_user');
-    setCurrentUser(null);
-    setData(DEFAULT_DATA);
-    setIsOfflineMode(false);
-  };
-
-  const handleSaveServerSettings = () => {
-    setServerUrl(serverUrlInput);
-    setCurrentServerUrl(getServerUrl());
-    setShowServerSettings(false);
-    setIsOfflineMode(false); // Reset to try connection again
-    alert(serverUrlInput ? "✅ SERVER CONFIG SAVED" : "⚠️ LOCAL MODE ENABLED");
-  };
-
   const handleInputChange = (field: keyof CommissionData, value: any) => {
     setData(prev => ({ ...prev, [field]: value }));
   };
@@ -340,25 +296,13 @@ const App: React.FC = () => {
 
   // --- Preset Manager Functions ---
   const handleSavePreset = async () => {
-    if (!currentUser) return;
     const name = newPresetName.trim() || `Preset ${new Date().toLocaleTimeString()}`;
     try {
-      const status = await savePreset(currentUser, name, data);
+      await savePreset(LOCAL_USER_ID, name, data);
       await loadPresetsList();
       setNewPresetName('');
       
-      if (status === 'cloud') {
-         alert('✅ 预设已同步至云端 / Saved to Cloud');
-         setIsOfflineMode(false);
-      } else {
-         // It was saved locally, but cloud failed
-         if (currentServerUrl) {
-            setIsOfflineMode(true);
-            alert('✅ 已保存至本地 (离线模式) / Saved Locally (Offline Mode)');
-         } else {
-            alert('✅ 预设已保存 (本地) / Saved Locally');
-         }
-      }
+      alert('✅ 预设已保存 (本地) / Preset Saved (Local)');
     } catch (e) {
       alert('保存失败 / Save Failed');
     }
@@ -398,11 +342,9 @@ const App: React.FC = () => {
           const importedData = JSON.parse(event.target?.result as string);
           // Basic validation
           if (importedData.photographerName !== undefined) {
-             if (currentUser) {
-                await savePreset(currentUser, `Imported ${new Date().toLocaleTimeString()}`, importedData);
-                await loadPresetsList();
-                alert('✅ 导入成功 / Import Successful');
-             }
+             await savePreset(LOCAL_USER_ID, `Imported ${new Date().toLocaleTimeString()}`, importedData);
+             await loadPresetsList();
+             alert('✅ 导入成功 / Import Successful');
           } else {
              alert('❌ 无效的文件 / Invalid File');
           }
@@ -479,101 +421,6 @@ const App: React.FC = () => {
     </div>
   );
 
-  // --- LOGIN SCREEN ---
-  if (!currentUser) {
-    return (
-      <div className="h-screen w-full bg-black flex items-center justify-center font-sans overflow-hidden relative">
-         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#330033_0%,_#000000_100%)] opacity-50"></div>
-         <div className="z-10 bg-neutral-900 border-2 border-pink-500 p-8 w-[90%] max-w-md shadow-[0_0_20px_rgba(255,0,128,0.3)] relative group">
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-black px-4 text-pink-500 font-black italic tracking-widest text-xl border-l-2 border-r-2 border-pink-500">
-              DOHNA SYSTEM
-            </div>
-            
-            <h2 className="text-white text-3xl font-black italic mb-6 text-center mt-4">
-              IDENTITY VERIFICATION
-            </h2>
-            
-            {!showServerSettings ? (
-              <form onSubmit={handleLogin} className="space-y-6">
-                 <div>
-                    <label className="block text-xs text-gray-400 font-mono mb-2 uppercase">Input Codename // 代号</label>
-                    <input 
-                      type="text" 
-                      value={loginInput}
-                      onChange={e => setLoginInput(e.target.value)}
-                      className="w-full bg-black border-b-2 border-gray-600 text-white p-3 text-xl font-bold focus:border-pink-500 focus:outline-none placeholder-gray-700 text-center uppercase tracking-widest"
-                      placeholder="ENTER ID..."
-                      autoFocus
-                    />
-                 </div>
-                 <button 
-                   type="submit" 
-                   className="w-full bg-pink-600 hover:bg-pink-500 text-white font-black italic text-xl py-3 border-2 border-white shadow-[4px_4px_0px_white] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all flex items-center justify-center gap-2"
-                 >
-                   LOGIN <ArrowRight size={24} />
-                 </button>
-                 
-                 <div className="text-center pt-4 border-t border-gray-800">
-                    <button 
-                       type="button" 
-                       onClick={() => setShowServerSettings(true)}
-                       className="text-gray-500 hover:text-cyan-400 text-xs font-mono flex items-center justify-center gap-2 w-full"
-                    >
-                       <Settings size={12} /> 
-                       {currentServerUrl ? "SERVER: CONNECTED" : "SERVER: LOCAL ONLY"}
-                    </button>
-                 </div>
-              </form>
-            ) : (
-              <div className="space-y-6 animate-fadeIn">
-                 <div>
-                    <label className="block text-xs text-cyan-400 font-mono mb-2 uppercase flex items-center gap-2">
-                       <Server size={14} /> Server API Endpoint
-                    </label>
-                    <input 
-                      type="text" 
-                      value={serverUrlInput}
-                      onChange={e => setServerUrlInput(e.target.value)}
-                      className="w-full bg-black border-b-2 border-cyan-600 text-white p-2 text-sm font-mono focus:border-cyan-400 focus:outline-none placeholder-gray-700"
-                      placeholder="https://your-app.vercel.app/api"
-                    />
-                    <p className="text-[10px] text-gray-500 mt-2">
-                       Set your backend API URL to enable cross-device sync.
-                       Leave empty for offline mode.
-                    </p>
-                 </div>
-                 <div className="flex gap-2">
-                    <button 
-                      type="button" 
-                      onClick={() => setShowServerSettings(false)}
-                      className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 border border-gray-600"
-                    >
-                      CANCEL
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={handleSaveServerSettings}
-                      className="flex-1 bg-cyan-700 hover:bg-cyan-600 text-white font-bold py-2 border border-cyan-400"
-                    >
-                      SAVE CONFIG
-                    </button>
-                 </div>
-              </div>
-            )}
-            
-            <div className="mt-6 text-[10px] text-gray-500 text-center font-mono flex justify-center gap-4">
-               <span>SECURE CONNECTION</span>
-               {currentServerUrl ? (
-                  <span className="text-cyan-500 flex items-center gap-1"><Cloud size={10} /> SYNC ON</span>
-               ) : (
-                  <span className="text-gray-600 flex items-center gap-1"><CloudOff size={10} /> OFFLINE</span>
-               )}
-            </div>
-         </div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-screen flex flex-col md:flex-row text-white overflow-hidden font-sans bg-neutral-900">
       
@@ -585,12 +432,7 @@ const App: React.FC = () => {
               <div className="bg-black p-4 border-b-2 border-cyan-500 flex justify-between items-center">
                  <h2 className="text-2xl font-black italic text-cyan-400 flex items-center gap-2">
                    <FolderOpen size={24} /> 
-                   DATA ARCHIVES
-                   {currentServerUrl && (
-                      isOfflineMode 
-                      ? <span className="text-xs bg-red-900 text-red-200 px-2 py-0.5 rounded ml-2 flex items-center gap-1"><CloudOff size={10} /> OFFLINE</span>
-                      : <span className="text-xs bg-cyan-900 text-cyan-200 px-2 py-0.5 rounded ml-2 flex items-center gap-1"><Cloud size={10} /> CLOUD</span>
-                   )}
+                   LOCAL ARCHIVES
                  </h2>
                  <button onClick={() => setShowPresetManager(false)} className="text-gray-400 hover:text-white">
                    <XCircle size={24} />
@@ -687,13 +529,8 @@ const App: React.FC = () => {
            <div>
              <h1 className="text-2xl font-black italic text-pink-500 tracking-tighter">DOHNA-CN</h1>
              <div className="flex items-center gap-1 text-[10px] text-gray-500 font-mono">
-                <User size={10} /> 
-                USER: <span className="text-white">{currentUser}</span>
-                {currentServerUrl && (
-                   isOfflineMode 
-                   ? <span className="ml-2 text-[8px] bg-red-900 text-red-200 px-1 rounded border border-red-700">OFFLINE</span>
-                   : <span className="ml-2 text-[8px] bg-cyan-900 text-cyan-200 px-1 rounded border border-cyan-700">CLOUD ON</span>
-                )}
+                <Database size={10} /> 
+                MODE: <span className="text-cyan-400">LOCAL STORAGE</span>
              </div>
            </div>
            
@@ -701,10 +538,6 @@ const App: React.FC = () => {
                <button onClick={() => setShowPresetManager(true)} className="bg-neutral-800 hover:bg-neutral-700 text-white p-2 border border-gray-600 transition-all text-xs flex items-center gap-1" title="Manage Presets">
                  <FolderOpen size={16} /> 
                  <span className="hidden lg:inline">ARCHIVES</span>
-               </button>
-               
-               <button onClick={handleLogout} className="bg-neutral-800 hover:bg-red-900 text-red-500 p-2 border border-gray-600 transition-all" title="Logout">
-                 <LogOut size={16} />
                </button>
 
                {/* Desktop Export Button */}
