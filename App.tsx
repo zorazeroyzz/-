@@ -19,7 +19,8 @@ import {
   Eye,
   EyeOff,
   MoveVertical,
-  XCircle
+  XCircle,
+  Layout
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -27,14 +28,23 @@ const App: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const [scaleFactor, setScaleFactor] = useState(1);
+  const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
 
-  // Calculate approximate scale factor based on window width for drag logic
+  // Calculate approximate scale factor based on window width
   useEffect(() => {
     const handleResize = () => {
       const w = window.innerWidth;
-      if (w >= 1024) setScaleFactor(0.75);
-      else if (w >= 768) setScaleFactor(0.65);
-      else setScaleFactor(0.5);
+      if (w >= 1024) {
+        setScaleFactor(0.75);
+      } else if (w >= 768) {
+        setScaleFactor(0.60);
+      } else {
+        // Mobile: Dynamic fit
+        // 750px is the card width. We leave 32px padding (16px each side)
+        const availableWidth = w - 32;
+        const scale = Math.min(0.5, availableWidth / 750);
+        setScaleFactor(scale);
+      }
     };
     handleResize();
     window.addEventListener('resize', handleResize);
@@ -189,8 +199,27 @@ const App: React.FC = () => {
   // --- Export ---
 
   const handleExport = useCallback(async () => {
-    if (previewRef.current) {
-      try {
+    // Determine which element to capture.
+    // If we are in 'editor' mode on mobile, the previewRef might be hidden (display: none),
+    // causing html-to-image to fail.
+    // However, we are swapping visibility classes.
+    // If the user clicks export on mobile, they should ideally be in preview mode or we force it.
+    
+    if (window.innerWidth < 768 && activeTab === 'editor') {
+       // If on mobile and in editor, switch to preview first to ensure rendering?
+       // Actually, we can just alert or switch tab. But let's assume the user knows or we handle visibility.
+       setActiveTab('preview');
+       // Give it a tick to render
+       setTimeout(() => {
+          if (previewRef.current) capture();
+       }, 100);
+    } else {
+       if (previewRef.current) capture();
+    }
+
+    async function capture() {
+       if (!previewRef.current) return;
+       try {
         const dataUrl = await toPng(previewRef.current, { cacheBust: true, pixelRatio: 2 });
         const link = document.createElement('a');
         link.download = `${data.photographerName}-commission.png`;
@@ -201,7 +230,7 @@ const App: React.FC = () => {
         alert('Failed to export image. Please try again.');
       }
     }
-  }, [data.photographerName]);
+  }, [data.photographerName, activeTab]);
 
   const toggleSection = (field: keyof CommissionData) => {
     setData(prev => ({ ...prev, [field]: !prev[field] }));
@@ -242,16 +271,22 @@ const App: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row text-white overflow-hidden font-sans">
+    <div className="h-screen flex flex-col md:flex-row text-white overflow-hidden font-sans bg-neutral-900">
       
       {/* --- Sidebar Editor (Left) --- */}
-      <div className="w-full md:w-[450px] bg-neutral-900 border-r-4 border-black flex flex-col h-screen z-20 shadow-2xl">
-        <div className="p-6 bg-black text-white border-b-4 border-neutral-800 flex justify-between items-center">
+      {/* Hidden on mobile if activeTab is 'preview', otherwise visible. Always visible on md+ */}
+      <div className={`
+          ${activeTab === 'editor' ? 'flex' : 'hidden'} 
+          md:flex w-full md:w-[450px] bg-neutral-900 border-r-4 border-black flex-col 
+          h-[calc(100vh-60px)] md:h-screen z-20 shadow-2xl
+      `}>
+        <div className="p-6 bg-black text-white border-b-4 border-neutral-800 flex justify-between items-center shrink-0">
            <div>
              <h1 className="text-2xl font-black italic text-pink-500 tracking-tighter">DOHNA-CN</h1>
              <p className="text-xs text-gray-500 font-mono">CN 2D PHOTO COMMISSION GEN</p>
            </div>
-           <button onClick={handleExport} className="bg-pink-600 hover:bg-pink-500 text-white p-3 border-2 border-white shadow-[4px_4px_0px_white] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all">
+           {/* Desktop Export Button */}
+           <button onClick={handleExport} className="hidden md:flex bg-pink-600 hover:bg-pink-500 text-white p-3 border-2 border-white shadow-[4px_4px_0px_white] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all">
              <Download size={20} />
            </button>
         </div>
@@ -315,7 +350,6 @@ const App: React.FC = () => {
                />
              </div>
 
-             {/* Removed specific top/gap controls, only kept bottom spacing */}
              <SpacingControl value={data.spacingHeader} field="spacingHeader" label="Header Bottom Spacing" />
            </div>
 
@@ -574,7 +608,12 @@ const App: React.FC = () => {
       </div>
 
       {/* --- Main Preview Area (Right) --- */}
-      <div className="flex-1 bg-neutral-900 relative overflow-y-auto custom-scrollbar flex items-start justify-center p-4 md:p-8">
+      {/* Hidden on mobile if activeTab is 'editor', otherwise visible. Always visible on md+ */}
+      <div className={`
+          ${activeTab === 'preview' ? 'flex' : 'hidden'}
+          md:flex flex-1 bg-neutral-900 relative overflow-y-auto custom-scrollbar items-start justify-center p-4 md:p-8
+          h-[calc(100vh-60px)] md:h-screen
+      `}>
         <div className="absolute inset-0 z-0 pointer-events-none opacity-20" 
              style={{ 
                backgroundImage: `
@@ -589,7 +628,7 @@ const App: React.FC = () => {
         ></div>
         
         {/* Adjusted scale for the taller aspect ratio */}
-        <div className="scale-[0.5] md:scale-[0.65] lg:scale-[0.75] origin-top transition-transform mt-4">
+        <div className="origin-top transition-transform mt-4" style={{ transform: `scale(${scaleFactor})` }}>
           <PreviewCard 
             data={data} 
             innerRef={previewRef} 
@@ -599,6 +638,31 @@ const App: React.FC = () => {
             onScaleChange={handleScaleChange}
           />
         </div>
+      </div>
+
+      {/* --- Mobile Bottom Nav --- */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-[60px] bg-black border-t-2 border-neutral-800 flex z-50">
+        <button 
+           className={`flex-1 flex flex-col items-center justify-center gap-1 ${activeTab === 'editor' ? 'text-pink-500' : 'text-gray-500'}`}
+           onClick={() => setActiveTab('editor')}
+        >
+          <Palette size={20} />
+          <span className="text-[10px] font-bold tracking-widest">编辑 EDIT</span>
+        </button>
+        <button 
+           className={`flex-1 flex flex-col items-center justify-center gap-1 ${activeTab === 'preview' ? 'text-pink-500' : 'text-gray-500'}`}
+           onClick={() => setActiveTab('preview')}
+        >
+          <Eye size={20} />
+          <span className="text-[10px] font-bold tracking-widest">预览 VIEW</span>
+        </button>
+        <button 
+           className="flex-1 flex flex-col items-center justify-center gap-1 text-gray-500 hover:text-white active:text-pink-500"
+           onClick={handleExport}
+        >
+          <Download size={20} />
+          <span className="text-[10px] font-bold tracking-widest">导出 SAVE</span>
+        </button>
       </div>
 
     </div>

@@ -1,7 +1,7 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { CommissionData, ThemeColors, ImageItem } from '../types';
 import { THEMES } from '../constants';
-import { Zap, Aperture, AlertTriangle, MessageSquare, Quote, Hash, Image as ImageIcon, Camera, Move, ZoomIn } from 'lucide-react';
+import { AlertTriangle, Hash, Camera, Move, ZoomIn, Trash2 } from 'lucide-react';
 
 interface PreviewCardProps {
   data: CommissionData;
@@ -21,7 +21,8 @@ interface EditableImageProps {
   theme: ThemeColors;
 }
 
-const EditableImage: React.FC<EditableImageProps> = ({ 
+// Optimized Image Component with Local State
+const EditableImage: React.FC<EditableImageProps> = React.memo(({ 
   item, 
   index, 
   listType, 
@@ -29,16 +30,32 @@ const EditableImage: React.FC<EditableImageProps> = ({
   scaleFactor,
   theme
 }) => {
+  // Local state for smooth performance without re-rendering the whole app
+  const [localState, setLocalState] = useState({
+    x: item.x,
+    y: item.y,
+    scale: item.scale
+  });
+
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{x: number, y: number} | null>(null);
   const initialPosRef = useRef<{x: number, y: number} | null>(null);
 
+  // Sync local state if props change externally (e.g. initial load or reset)
+  useEffect(() => {
+    setLocalState({
+      x: item.x,
+      y: item.y,
+      scale: item.scale
+    });
+  }, [item.x, item.y, item.scale]);
+
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
-    e.stopPropagation(); // Prevent bubbling to header dragging
+    e.stopPropagation();
     setIsDragging(true);
     dragStartRef.current = { x: e.clientX, y: e.clientY };
-    initialPosRef.current = { x: item.x, y: item.y };
+    initialPosRef.current = { x: localState.x, y: localState.y };
   };
 
   useEffect(() => {
@@ -48,14 +65,23 @@ const EditableImage: React.FC<EditableImageProps> = ({
       const dx = (e.clientX - dragStartRef.current.x) / scaleFactor;
       const dy = (e.clientY - dragStartRef.current.y) / scaleFactor;
 
-      onUpdate(listType, index, {
-        x: initialPosRef.current.x + dx,
-        y: initialPosRef.current.y + dy
-      });
+      // Update local state only (FAST)
+      setLocalState(prev => ({
+        ...prev,
+        x: initialPosRef.current!.x + dx,
+        y: initialPosRef.current!.y + dy
+      }));
     };
 
     const handleMouseUp = () => {
-      setIsDragging(false);
+      if (isDragging) {
+        setIsDragging(false);
+        // Commit changes to global state (SLOW but only once)
+        onUpdate(listType, index, {
+          x: localState.x,
+          y: localState.y
+        });
+      }
     };
 
     if (isDragging) {
@@ -66,26 +92,23 @@ const EditableImage: React.FC<EditableImageProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, scaleFactor, index, listType, onUpdate]);
+  }, [isDragging, scaleFactor, listType, index, onUpdate, localState.x, localState.y]);
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    // Determine scale direction
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    let newScale = Math.max(0.1, Math.min(5, item.scale + delta));
-    
-    onUpdate(listType, index, { scale: newScale });
+  // Handle Slider Change for Zoom
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newScale = parseFloat(e.target.value);
+    setLocalState(prev => ({ ...prev, scale: newScale }));
   };
 
-  // Determine column span based on list type and orientation
+  // Commit Slider Change on Mouse Up
+  const handleSliderCommit = () => {
+    onUpdate(listType, index, { scale: localState.scale });
+  };
+
   const getGridClasses = () => {
     if (listType === 'mainImages') {
-      // Main Work: 4 cols total. Landscape=2, Portrait=1.
       return item.isLandscape ? 'col-span-2 aspect-auto' : 'col-span-1 aspect-[2/3]';
     } else {
-      // Exhibition: 3 cols total. Landscape=3, Portrait=1.
       return item.isLandscape ? 'col-span-3 aspect-auto' : 'col-span-1 aspect-[2/3]';
     }
   };
@@ -95,44 +118,65 @@ const EditableImage: React.FC<EditableImageProps> = ({
       className={`relative group bg-white shadow-sm overflow-hidden ${getGridClasses()}`}
       style={{ border: `1px solid ${theme.secondary}` }}
     >
-        {/* Helper text overlay on hover */}
-        <div className="absolute top-0 right-0 p-1 z-20 opacity-0 group-hover:opacity-100 bg-black/50 text-white text-[10px] pointer-events-none transition-opacity">
-          <div className="flex items-center gap-1"><Move size={10} /> Drag</div>
-          <div className="flex items-center gap-1"><ZoomIn size={10} /> Scroll</div>
+        {/* Controls Overlay (Only Visible on Hover) */}
+        <div className="absolute bottom-0 left-0 right-0 p-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between gap-2 pointer-events-auto">
+           {/* Move Icon Indicator */}
+           <div className="text-white text-[10px] font-mono flex items-center gap-1 opacity-70">
+              <Move size={10} />
+           </div>
+
+           {/* Zoom Slider */}
+           <div className="flex items-center gap-2 flex-1 max-w-[60%]">
+              <ZoomIn size={10} className="text-white" />
+              <input 
+                type="range" 
+                min="0.1" 
+                max="3" 
+                step="0.05" 
+                value={localState.scale}
+                onChange={handleSliderChange}
+                onMouseUp={handleSliderCommit}
+                onTouchEnd={handleSliderCommit}
+                className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                onMouseDown={(e) => e.stopPropagation()} 
+              />
+           </div>
         </div>
 
-        {/* The visual image (transformed) */}
-        <div className="w-full h-full"> 
+        {/* The visual image */}
+        <div className="w-full h-full bg-gray-100"> 
             <img 
               src={item.url} 
-              className="w-full block cursor-move relative z-10 origin-center" 
+              className="w-full block cursor-move relative z-10 origin-center will-change-transform" 
               alt="Portfolio" 
               style={{ 
-                transform: `translate(${item.x}px, ${item.y}px) scale(${item.scale})`
+                transform: `translate(${localState.x}px, ${localState.y}px) scale(${localState.scale})`,
+                transition: isDragging ? 'none' : 'transform 0.1s ease-out'
               }}
               onMouseDown={handleMouseDown}
-              onWheel={handleWheel}
+              draggable={false}
             />
         </div>
     </div>
   );
-};
-
+});
 
 const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, onPosChange, onImageUpdate, onScaleChange }) => {
   const theme = THEMES[data.themeColor];
+  
+  // Header drag logic remains mostly same but could also be optimized. 
+  // Given low count of header items, keeping it simple for now, but adding stopPropagation to avoid conflicts.
+  
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const dragStartRef = useRef<{x: number, y: number} | null>(null);
   const initialPosRef = useRef<{x: number, y: number} | null>(null);
 
-  // Generic Drag Logic for Header Elements
-  const handleMouseDown = (e: React.MouseEvent, id: string) => {
+  const handleHeaderMouseDown = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
     setDraggedId(id);
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     
-    // Set initial position based on ID
     let startPos = { x: 0, y: 0 };
     if (id === 'avatar') startPos = data.avatarPosition;
     if (id === 'status') startPos = data.statusPosition;
@@ -155,7 +199,8 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
         x: initialPosRef.current.x + dx,
         y: initialPosRef.current.y + dy
       };
-
+      
+      // We still update parent directly for header items as there are few of them
       onPosChange(draggedId, newPos);
     };
 
@@ -173,9 +218,8 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
     };
   }, [draggedId, scaleFactor, onPosChange]);
 
-  const ImageGrid = ({ images, listType, title }: { images: ImageItem[], listType: 'exhibitionImages' | 'mainImages', title: string }) => (
+  const ImageGrid = React.useMemo(() => ({ images, listType, title }: { images: ImageItem[], listType: 'exhibitionImages' | 'mainImages', title: string }) => (
     <div className="mb-4">
-      {/* Title Header - Always Visible */}
       <div className="flex items-center gap-2 mb-2 px-6">
           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.primary }}></span>
           <h4 className="text-sm font-bold uppercase tracking-widest text-gray-500">{title}</h4>
@@ -203,25 +247,24 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
         </div>
       )}
     </div>
-  );
+  ), [theme, scaleFactor, onImageUpdate]);
 
   return (
     <div className="w-full flex justify-center py-8 bg-gray-900/50">
-      {/* Container - Modeled after a "Long Phone Image" (长条图) */}
       <div 
         ref={innerRef}
-        className="relative w-[750px] bg-white flex flex-col font-sans"
+        className="relative w-[750px] bg-white flex flex-col font-sans shadow-2xl"
         style={{ backgroundColor: '#ffffff' }}
       >
-        {/* === HEADER AREA (Compacted) === */}
+        {/* === HEADER AREA === */}
         <div className="relative overflow-hidden z-10"
              style={{ 
                backgroundColor: theme.secondary, 
                color: theme.text,
-               paddingBottom: `${24 + data.spacingHeader}px` // Reduced padding
+               paddingBottom: `${24 + data.spacingHeader}px` 
              }}>
           
-          {/* Background Abstract Shapes */}
+          {/* Abstract BG */}
           <div className="absolute inset-0 opacity-20 pointer-events-none" 
                style={{ 
                   backgroundImage: `
@@ -236,20 +279,21 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
           <div className="relative z-10 px-6 pt-6">
             
             <div className="flex justify-between items-start">
-               {/* 1. SYSTEM STATUS (Draggable & Zoomable) */}
+               {/* 1. SYSTEM STATUS */}
                <div 
                  className="flex flex-col gap-1 cursor-move group relative z-30"
                  style={{ transform: `translate(${data.statusPosition.x}px, ${data.statusPosition.y}px) scale(${data.statusScale})` }}
-                 onMouseDown={(e) => handleMouseDown(e, 'status')}
+                 onMouseDown={(e) => handleHeaderMouseDown(e, 'status')}
                  onWheel={(e) => {
-                    e.preventDefault();
+                    // Keep wheel for header elements but protect propagation
                     e.stopPropagation();
+                    e.preventDefault();
                     const delta = e.deltaY > 0 ? -0.1 : 0.1;
                     onScaleChange('status', Math.max(0.5, Math.min(3, data.statusScale + delta)));
                  }}
                >
                  <div className="absolute -top-3 left-0 bg-pink-500 text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                    <Move size={8} className="inline mr-1"/>MOVE <ZoomIn size={8} className="inline ml-1"/>ZOOM
+                    <Move size={8} className="inline mr-1"/>MOVE <ZoomIn size={8} className="inline ml-1"/>ZOOM (Wheel)
                  </div>
                  <div className="px-2 py-0.5 font-black text-xs tracking-widest uppercase transform -skew-x-12 border w-fit shadow-md"
                       style={{ backgroundColor: theme.primary, color: theme.secondary, borderColor: theme.text }}>
@@ -257,20 +301,20 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                  </div>
                </div>
 
-               {/* 2. AVATAR (Draggable & Zoomable) */}
+               {/* 2. AVATAR */}
                <div 
                   className="relative w-32 h-32 shrink-0 group z-20 cursor-move"
                   style={{ transform: `translate(${data.avatarPosition.x}px, ${data.avatarPosition.y}px) scale(${data.avatarScale})` }}
-                  onMouseDown={(e) => handleMouseDown(e, 'avatar')}
+                  onMouseDown={(e) => handleHeaderMouseDown(e, 'avatar')}
                   onWheel={(e) => {
-                    e.preventDefault();
                     e.stopPropagation();
+                    e.preventDefault();
                     const delta = e.deltaY > 0 ? -0.1 : 0.1;
                     onScaleChange('avatar', Math.max(0.5, Math.min(3, data.avatarScale + delta)));
                   }}
                >
                   <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black/50 text-white text-[10px] px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                    <Move size={8} className="inline mr-1"/>Drag <ZoomIn size={8} className="inline ml-1"/>Zoom
+                    <Move size={8} className="inline mr-1"/>Drag <ZoomIn size={8} className="inline ml-1"/>Zoom (Wheel)
                   </div>
 
                   <div className="absolute inset-0 rotate-6 border-2 transition-transform group-hover:rotate-12 shadow-lg pointer-events-none" 
@@ -288,11 +332,11 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                </div>
             </div>
 
-            {/* 3. Main Title (Draggable) */}
+            {/* 3. Main Title */}
             <div 
               className="mt-2 relative cursor-move group w-fit z-30"
               style={{ transform: `translate(${data.titlePosition.x}px, ${data.titlePosition.y}px)` }}
-              onMouseDown={(e) => handleMouseDown(e, 'title')}
+              onMouseDown={(e) => handleHeaderMouseDown(e, 'title')}
             >
                <div className="absolute -top-6 left-0 bg-pink-500 text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                   <Move size={8} className="inline mr-1"/>MOVE
@@ -306,11 +350,11 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
               </h1>
             </div>
 
-            {/* 4. Slogan Bar (Draggable) */}
+            {/* 4. Slogan Bar */}
             <div 
               className="flex items-center gap-2 mt-2 cursor-move group w-fit relative z-30"
               style={{ transform: `translate(${data.sloganPosition.x}px, ${data.sloganPosition.y}px)` }}
-              onMouseDown={(e) => handleMouseDown(e, 'slogan')}
+              onMouseDown={(e) => handleHeaderMouseDown(e, 'slogan')}
             >
               <div className="absolute -top-4 left-0 bg-pink-500 text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                   <Move size={8} className="inline mr-1"/>MOVE
@@ -321,18 +365,17 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
               </p>
             </div>
 
-            {/* 5. Tags (Draggable) */}
+            {/* 5. Tags */}
             <div 
               className="mt-4 cursor-move group relative w-fit z-30"
               style={{ transform: `translate(${data.tagsPosition.x}px, ${data.tagsPosition.y}px)` }}
-              onMouseDown={(e) => handleMouseDown(e, 'tags')}
+              onMouseDown={(e) => handleHeaderMouseDown(e, 'tags')}
             >
                <div className="absolute -top-4 left-0 bg-pink-500 text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                   <Move size={8} className="inline mr-1"/>MOVE
                </div>
               
                <div className="flex items-center gap-3">
-                  {/* New Label */}
                   <span className="text-2xl font-black italic tracking-tighter" 
                         style={{ 
                             color: theme.text, 
@@ -342,7 +385,6 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                       互勉题材
                   </span>
 
-                  {/* Tags */}
                   <div className="flex flex-wrap gap-2">
                     {data.tags.map((tag, i) => (
                       <span key={i} 
@@ -357,7 +399,6 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
             </div>
           </div>
           
-          {/* Jagged Divider */}
           <div className="absolute bottom-0 left-0 w-full h-6" 
                style={{ 
                  background: '#ffffff', 
@@ -369,7 +410,7 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
         {/* === MAIN CONTENT === */}
         <div className="pb-6 relative z-0">
            
-           {/* 1. IMAGES / PORTFOLIO SECTION (Wide Layout) */}
+           {/* 1. IMAGES */}
            {data.showPortfolio && (
              <div className="relative mt-4" style={{ marginBottom: `${data.spacingPortfolio}px`, zIndex: 10 }}>
                 <div className="grid grid-cols-1 gap-4">
@@ -387,7 +428,7 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
              </div>
            )}
 
-           {/* 2. PRICING / MENU */}
+           {/* 2. PRICING */}
            {data.showPricing && (
              <div className="relative px-6" style={{ marginBottom: `${data.spacingPricing}px`, zIndex: 20 }}>
                 <div className="flex items-center gap-2 mb-4 border-b-2 pb-2" style={{ borderColor: theme.secondary }}>
@@ -420,11 +461,10 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
              </div>
            )}
 
-           {/* 3. NOTICE / RULES */}
+           {/* 3. NOTICE */}
            {data.showNotice && (
              <div className="relative px-6" style={{ marginBottom: `${data.spacingNotice}px`, zIndex: 30 }}>
                 <div className="text-white p-4 relative overflow-hidden rounded-sm" style={{ backgroundColor: theme.secondary }}>
-                   {/* Stripe Pattern */}
                    <div className="absolute top-0 right-0 w-24 h-24 transform rotate-45 translate-x-12 -translate-y-12 opacity-20"
                         style={{ backgroundColor: theme.accent }}></div>
                    
@@ -444,13 +484,12 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
              </div>
            )}
 
-           {/* 4. FOOTER / CONTACT */}
+           {/* 4. FOOTER */}
            {data.showContact && (
              <div className="pb-4 px-6 relative" style={{ zIndex: 40 }}>
                 <div className="border-2 p-4 text-center relative flex flex-col items-center overflow-hidden" 
                      style={{ borderColor: theme.secondary, backgroundColor: '#fff' }}>
                    
-                   {/* Background Image Layer */}
                    {data.contactBackgroundImage && (
                      <div className="absolute inset-0 z-0 overflow-hidden">
                         <img 
@@ -461,19 +500,12 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                                transform: `translate(${data.contactBackgroundPosition?.x || 0}px, ${data.contactBackgroundPosition?.y || 0}px) scale(${data.contactBackgroundScale})`,
                                opacity: data.contactBackgroundOpacity
                            }}
-                           onMouseDown={(e) => handleMouseDown(e, 'contactBg')}
+                           onMouseDown={(e) => handleHeaderMouseDown(e, 'contactBg')}
                            draggable={false}
-                           onWheel={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              const delta = e.deltaY > 0 ? -0.1 : 0.1;
-                              onScaleChange('contactBg', Math.max(0.1, Math.min(5, data.contactBackgroundScale + delta)));
-                           }}
                         />
                      </div>
                    )}
 
-                   {/* Content Layer */}
                    <div className="relative z-10 w-full flex flex-col items-center pointer-events-none">
                        <h3 className="text-3xl font-black mb-6 italic tracking-tighter drop-shadow-sm" 
                            style={{ 
@@ -483,29 +515,20 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                          CONTACT ME
                        </h3>
                        
-                       {/* Dual QR Code Area - NEW DESIGN */}
                        <div className="flex items-center justify-center gap-10 w-full max-w-lg pointer-events-auto mb-6">
-                         {/* QQ */}
                          {data.qrCodeQQ && (
                            <div className="relative group">
-                               {/* Back decorative layers */}
                                <div className="absolute -inset-2 bg-black/20 translate-y-2 translate-x-2"></div>
                                <div className="absolute -inset-1 rotate-3" style={{ backgroundColor: theme.primary }}></div>
-                               
-                               {/* QR Container */}
                                <div className="relative bg-white p-2 border-2" style={{ borderColor: theme.secondary }}>
                                    <div className="w-32 h-32 relative">
                                        <img src={data.qrCodeQQ} alt="QQ" className="w-full h-full object-contain" />
-                                       
-                                       {/* Decorative Corners */}
                                        <div className="absolute top-0 left-0 w-3 h-3 border-t-4 border-l-4" style={{ borderColor: theme.secondary }}></div>
                                        <div className="absolute top-0 right-0 w-3 h-3 border-t-4 border-r-4" style={{ borderColor: theme.secondary }}></div>
                                        <div className="absolute bottom-0 left-0 w-3 h-3 border-b-4 border-l-4" style={{ borderColor: theme.secondary }}></div>
                                        <div className="absolute bottom-0 right-0 w-3 h-3 border-b-4 border-r-4" style={{ borderColor: theme.secondary }}></div>
                                    </div>
                                </div>
-
-                               {/* Badge */}
                                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-1 text-sm font-black italic tracking-widest border-2 shadow-[2px_2px_0px_rgba(0,0,0,0.2)]"
                                     style={{ backgroundColor: theme.secondary, color: theme.primary, borderColor: theme.text }}>
                                  QQ
@@ -513,27 +536,19 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                            </div>
                          )}
 
-                         {/* WeChat */}
                          {data.qrCodeWeChat && (
                            <div className="relative group">
-                               {/* Back decorative layers */}
                                <div className="absolute -inset-2 bg-black/20 translate-y-2 translate-x-2"></div>
                                <div className="absolute -inset-1 -rotate-2" style={{ backgroundColor: theme.accent }}></div>
-                               
-                               {/* QR Container */}
                                <div className="relative bg-white p-2 border-2" style={{ borderColor: theme.secondary }}>
                                    <div className="w-32 h-32 relative">
                                        <img src={data.qrCodeWeChat} alt="WX" className="w-full h-full object-contain" />
-                                       
-                                       {/* Decorative Corners */}
                                        <div className="absolute top-0 left-0 w-3 h-3 border-t-4 border-l-4" style={{ borderColor: theme.secondary }}></div>
                                        <div className="absolute top-0 right-0 w-3 h-3 border-t-4 border-r-4" style={{ borderColor: theme.secondary }}></div>
                                        <div className="absolute bottom-0 left-0 w-3 h-3 border-b-4 border-l-4" style={{ borderColor: theme.secondary }}></div>
                                        <div className="absolute bottom-0 right-0 w-3 h-3 border-b-4 border-r-4" style={{ borderColor: theme.secondary }}></div>
                                    </div>
                                </div>
-
-                               {/* Badge */}
                                <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-1 text-sm font-black italic tracking-widest border-2 shadow-[2px_2px_0px_rgba(0,0,0,0.2)]"
                                     style={{ backgroundColor: theme.secondary, color: theme.accent, borderColor: theme.text }}>
                                  WECHAT
@@ -542,7 +557,6 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                          )}
                        </div>
 
-                       {/* Footer Text */}
                        <div className="mt-4 flex items-center gap-0 pointer-events-auto shadow-lg">
                           <span className="font-black text-sm px-4 py-2 border-y-2 border-l-2" 
                                 style={{ 
