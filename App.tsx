@@ -46,33 +46,67 @@ const processQrImage = (file: File): Promise<string> => {
         
         try {
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          
+          // Defensive check for ESM default export vs named export
+          // @ts-ignore
+          const qrScanner = jsQR.default || jsQR;
+          
+          if (typeof qrScanner !== 'function') {
+             console.error("jsQR library not loaded correctly", qrScanner);
+             resolve(result);
+             return;
+          }
+
+          const code = qrScanner(imageData.data, imageData.width, imageData.height);
           
           if (code) {
-             // Calculate bounds with padding
-             const padding = 20; 
+             console.log("QR Code detected at:", code.location);
+             
              const loc = code.location;
              
-             const minX = Math.floor(Math.min(loc.topLeftCorner.x, loc.bottomLeftCorner.x, loc.topRightCorner.x, loc.bottomRightCorner.x));
-             const maxX = Math.ceil(Math.max(loc.topLeftCorner.x, loc.bottomLeftCorner.x, loc.topRightCorner.x, loc.bottomRightCorner.x));
-             const minY = Math.floor(Math.min(loc.topLeftCorner.y, loc.topRightCorner.y, loc.bottomLeftCorner.y, loc.bottomRightCorner.y));
-             const maxY = Math.ceil(Math.max(loc.topLeftCorner.y, loc.topRightCorner.y, loc.bottomLeftCorner.y, loc.bottomRightCorner.y));
+             // 1. Calculate the bounding box of the QR code content
+             const minX = Math.min(loc.topLeftCorner.x, loc.bottomLeftCorner.x, loc.topRightCorner.x, loc.bottomRightCorner.x);
+             const maxX = Math.max(loc.topLeftCorner.x, loc.bottomLeftCorner.x, loc.topRightCorner.x, loc.bottomRightCorner.x);
+             const minY = Math.min(loc.topLeftCorner.y, loc.topRightCorner.y, loc.bottomLeftCorner.y, loc.bottomRightCorner.y);
+             const maxY = Math.max(loc.topLeftCorner.y, loc.topRightCorner.y, loc.bottomLeftCorner.y, loc.bottomRightCorner.y);
 
-             const cropX = Math.max(0, minX - padding);
-             const cropY = Math.max(0, minY - padding);
-             const cropW = Math.min(canvas.width - cropX, (maxX - minX) + padding * 2);
-             const cropH = Math.min(canvas.height - cropY, (maxY - minY) + padding * 2);
+             // 2. Determine geometric properties
+             const centerX = (minX + maxX) / 2;
+             const centerY = (minY + maxY) / 2;
+             const qrWidth = maxX - minX;
+             const qrHeight = maxY - minY;
+             
+             // 3. Force a square aspect ratio based on the largest dimension
+             const baseSize = Math.max(qrWidth, qrHeight);
+             
+             // 4. Add comfortable padding (e.g., 40% total extra space = 20% each side) to ensure "Quiet Zone"
+             const finalSize = Math.round(baseSize * 1.4);
 
+             // 5. Create the destination canvas
              const cropCanvas = document.createElement('canvas');
-             cropCanvas.width = cropW;
-             cropCanvas.height = cropH;
+             cropCanvas.width = finalSize;
+             cropCanvas.height = finalSize;
              const cropCtx = cropCanvas.getContext('2d');
              
              if (cropCtx) {
-               cropCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+               // 6. Fill with WHITE background. 
+               // This is crucial for QR codes (needs contrast) and handles cases where we crop outside source bounds.
+               cropCtx.fillStyle = '#ffffff';
+               cropCtx.fillRect(0, 0, finalSize, finalSize);
+               
+               // 7. Draw the image translated to the center
+               // Move origin to center of new canvas
+               cropCtx.translate(finalSize / 2, finalSize / 2);
+               // Draw original image offset by the QR code's center
+               // This effectively centers the QR code in the new square canvas
+               cropCtx.drawImage(canvas, -centerX, -centerY);
+               
+               console.log("QR Cropped & Centered Successfully");
                resolve(cropCanvas.toDataURL());
                return;
              }
+          } else {
+             console.log("No QR code found in image, using original.");
           }
         } catch (err) {
           console.error("QR Crop Error", err);
@@ -633,7 +667,7 @@ const App: React.FC = () => {
                           )}
                           <input type="file" accept="image/*" onChange={(e) => handleQrUpload(e, 'qq')} className="absolute inset-0 opacity-0 cursor-pointer" />
                       </div>
-                      <div className="text-xs text-gray-400">QQ QR Code</div>
+                      <div className="text-xs text-gray-400">QQ QR Code <span className="text-[10px] text-pink-500 opacity-70">(Auto Crop)</span></div>
                     </div>
 
                     {/* WeChat Upload */}
@@ -649,7 +683,7 @@ const App: React.FC = () => {
                           )}
                           <input type="file" accept="image/*" onChange={(e) => handleQrUpload(e, 'wechat')} className="absolute inset-0 opacity-0 cursor-pointer" />
                       </div>
-                      <div className="text-xs text-gray-400">WeChat QR Code</div>
+                      <div className="text-xs text-gray-400">WeChat QR Code <span className="text-[10px] text-green-500 opacity-70">(Auto Crop)</span></div>
                     </div>
 
                     <div className="mt-2">
