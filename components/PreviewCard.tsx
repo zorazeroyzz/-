@@ -79,9 +79,20 @@ const EditableImage: React.FC<EditableImageProps> = ({
     onUpdate(listType, index, { scale: newScale });
   };
 
+  // Determine column span based on list type and orientation
+  const getGridClasses = () => {
+    if (listType === 'mainImages') {
+      // Main Work: 4 cols total. Landscape=2, Portrait=1.
+      return item.isLandscape ? 'col-span-2 aspect-auto' : 'col-span-1 aspect-[2/3]';
+    } else {
+      // Exhibition: 3 cols total. Landscape=3, Portrait=1.
+      return item.isLandscape ? 'col-span-3 aspect-auto' : 'col-span-1 aspect-[2/3]';
+    }
+  };
+
   return (
     <div 
-      className={`relative group bg-white shadow-sm overflow-hidden ${item.isLandscape ? 'col-span-3 aspect-auto' : 'col-span-1 aspect-[2/3]'}`}
+      className={`relative group bg-white shadow-sm overflow-hidden ${getGridClasses()}`}
       style={{ border: `1px solid ${theme.secondary}` }}
     >
         {/* Helper text overlay on hover */}
@@ -172,7 +183,7 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
       </div>
       
       {images.length > 0 ? (
-        <div className="grid grid-cols-3 gap-1 px-1">
+        <div className={`grid gap-1 px-1 ${listType === 'mainImages' ? 'grid-cols-4' : 'grid-cols-3'}`}>
           {images.map((item, i) => (
              <EditableImage 
                key={item.id} 
