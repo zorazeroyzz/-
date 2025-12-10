@@ -22,7 +22,9 @@ import {
   EyeOff,
   MoveVertical,
   XCircle,
-  Layout
+  Layout,
+  Save,
+  FolderOpen
 } from 'lucide-react';
 
 const processQrImage = (file: File): Promise<string> => {
@@ -292,6 +294,38 @@ const App: React.FC = () => {
     updatePricing(id, 'desc', newText);
   };
 
+  // --- Preset Actions ---
+
+  const savePreset = () => {
+    try {
+      const preset = JSON.stringify(data);
+      localStorage.setItem('dohna_commission_preset', preset);
+      alert('✅ 预设已保存 / PRESET SAVED');
+    } catch (e) {
+      console.error(e);
+      alert('❌ 保存失败 / SAVE FAILED');
+    }
+  };
+
+  const loadPreset = () => {
+    const preset = localStorage.getItem('dohna_commission_preset');
+    if (preset) {
+      if (window.confirm('⚠️ 确定要读取存档覆盖当前内容吗？\nOverwrite current data with saved preset?')) {
+        try {
+          const parsed = JSON.parse(preset);
+          // Merge with DEFAULT_DATA to ensure any new fields added in code updates are present
+          setData({ ...DEFAULT_DATA, ...parsed });
+          alert('📂 预设已读取 / PRESET LOADED');
+        } catch (e) {
+          console.error(e);
+          alert('❌ 读取失败 / LOAD FAILED');
+        }
+      }
+    } else {
+      alert('❌ 没有找到存档 / NO PRESET FOUND');
+    }
+  };
+
   // --- Export ---
 
   const handleExport = useCallback(async () => {
@@ -381,10 +415,19 @@ const App: React.FC = () => {
              <h1 className="text-2xl font-black italic text-pink-500 tracking-tighter">DOHNA-CN</h1>
              <p className="text-xs text-gray-500 font-mono">CN 2D PHOTO COMMISSION GEN</p>
            </div>
-           {/* Desktop Export Button */}
-           <button onClick={handleExport} className="hidden md:flex bg-pink-600 hover:bg-pink-500 text-white p-3 border-2 border-white shadow-[4px_4px_0px_white] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all">
-             <Download size={20} />
-           </button>
+           
+           <div className="flex items-center gap-2">
+               <button onClick={loadPreset} className="bg-neutral-800 hover:bg-neutral-700 text-white p-2 border border-gray-600 transition-all" title="读取预设 Load">
+                 <FolderOpen size={18} />
+               </button>
+               <button onClick={savePreset} className="bg-neutral-800 hover:bg-neutral-700 text-white p-2 border border-gray-600 transition-all" title="保存预设 Save">
+                 <Save size={18} />
+               </button>
+               {/* Desktop Export Button */}
+               <button onClick={handleExport} className="hidden md:flex bg-pink-600 hover:bg-pink-500 text-white p-3 border-2 border-white shadow-[4px_4px_0px_white] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all">
+                 <Download size={20} />
+               </button>
+           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
@@ -704,7 +747,7 @@ const App: React.FC = () => {
       </div>
 
       {/* --- Main Preview Area (Right) --- */}
-      {/* Hidden on mobile if activeTab is 'editor', otherwise visible. Always visible on md+ */}
+      {/* Hidden on mobile if activeTab is 'preview', otherwise visible. Always visible on md+ */}
       <div className={`
           ${activeTab === 'preview' ? 'flex' : 'hidden'}
           md:flex flex-1 bg-neutral-900 relative overflow-y-auto custom-scrollbar items-start justify-center p-4 md:p-8
