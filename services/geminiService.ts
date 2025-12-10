@@ -1,9 +1,27 @@
 import { GoogleGenAI } from "@google/genai";
 
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
+  let apiKey: string | undefined;
+  
+  try {
+    // Safely attempt to access process.env
+    apiKey = process.env.API_KEY;
+  } catch (e) {
+    console.warn("process.env access failed, checking import.meta.env");
+  }
+
+  // Fallback for Vite environments if process.env failed or was empty
   if (!apiKey) {
-    throw new Error("API Key not found");
+    try {
+      // @ts-ignore
+      apiKey = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  if (!apiKey) {
+    throw new Error("API Key not found. Please set VITE_API_KEY or process.env.API_KEY.");
   }
   return new GoogleGenAI({ apiKey });
 };
