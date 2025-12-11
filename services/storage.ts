@@ -33,8 +33,18 @@ const saveLocal = async (preset: Preset) => {
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     const request = store.put(preset);
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve();
+    
+    // Use transaction events for better error bubbling
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = (event) => {
+        // @ts-ignore
+        const error = event.target.error;
+        if (error && error.name === 'QuotaExceededError') {
+            reject(new Error('QuotaExceededError: Storage is full'));
+        } else {
+            reject(error || new Error('Unknown Transaction Error'));
+        }
+    };
   });
 }
 

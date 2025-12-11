@@ -27,6 +27,47 @@ import {
   Palette
 } from 'lucide-react';
 
+// --- Image Compression Helper ---
+const compressImage = (file: File, maxWidth: number = 1000, quality: number = 0.8): Promise<{ url: string, width: number, height: number }> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Resize if larger than maxWidth
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+        }
+        
+        // Use JPEG for non-transparent images to save massive space
+        // Use PNG if original was PNG (to preserve transparency for avatars/logos)
+        const outputType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        
+        // toDataURL quality param only works for jpeg/webp
+        resolve({
+            url: canvas.toDataURL(outputType, quality),
+            width,
+            height
+        });
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 const processQrImage = (file: File): Promise<string> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -226,24 +267,27 @@ const App: React.FC = () => {
     }));
   }, []);
 
-  // --- File Handlers ---
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // --- File Handlers (Updated with Compression) ---
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
+      try {
+        // Avatar max 400px
+        const { url } = await compressImage(file, 400);
         setData(prev => ({
           ...prev,
-          avatar: reader.result as string
+          avatar: url
         }));
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Avatar compression failed", err);
+      }
     }
   };
 
   const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'qq' | 'wechat') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      // QR Codes usually need clear lines, crop logic handles resizing implicitly
       const processedImage = await processQrImage(file);
       setData(prev => ({
         ...prev,
@@ -252,59 +296,63 @@ const App: React.FC = () => {
     }
   };
 
-  const handleContactBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleContactBgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
+      try {
+        // BG max 800px is sufficient for texture
+        const { url } = await compressImage(file, 800);
         setData(prev => ({
           ...prev,
-          contactBackgroundImage: reader.result as string
+          contactBackgroundImage: url
         }));
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("BG compression failed", err);
+      }
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, targetList: 'exhibitionImages' | 'mainImages') => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetList: 'exhibitionImages' | 'mainImages') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const resultStr = reader.result as string;
-        const img = new Image();
-        img.onload = () => {
-          const isLandscape = img.width > img.height;
-          const newItem: ImageItem = {
-            id: Date.now().toString() + Math.random().toString(),
-            url: resultStr,
-            x: 0,
-            y: 0,
-            scale: 1,
-            isLandscape
-          };
-          setData(prev => ({
-            ...prev,
-            [targetList]: [...prev[targetList], newItem] 
-          }));
+      try {
+        // Portfolio images max 1000px
+        const { url, width, height } = await compressImage(file, 1000);
+        const isLandscape = width > height;
+        const newItem: ImageItem = {
+          id: Date.now().toString() + Math.random().toString(),
+          url: url,
+          x: 0,
+          y: 0,
+          scale: 1,
+          isLandscape
         };
-        img.src = resultStr;
-      };
-      reader.readAsDataURL(file);
+        setData(prev => ({
+          ...prev,
+          [targetList]: [...prev[targetList], newItem] 
+        }));
+      } catch (err) {
+        console.error("Image compression failed", err);
+      }
     }
   };
 
-  // --- Preset Manager Functions ---
+  // --- Preset Manager Functions (Updated Error Handling) ---
   const handleSavePreset = async () => {
     const name = newPresetName.trim() || `SAVE FILE ${new Date().toLocaleTimeString()}`;
     try {
       await savePreset(LOCAL_USER_ID, name, data);
       await loadPresetsList();
       setNewPresetName('');
-      
       alert('GAME SAVED.');
-    } catch (e) {
-      alert('SAVE FAILED');
+    } catch (e: any) {
+      console.error(e);
+      // Detailed error message
+      if (e.message && (e.message.includes('Quota') || e.name === 'QuotaExceededError')) {
+          alert('SAVE FAILED: Storage Full! The images are too large for browser storage. Please delete old saves or re-upload images (they will now be auto-compressed).');
+      } else {
+          alert(`SAVE FAILED: ${e.message || 'Unknown Error'}`);
+      }
     }
   };
 
