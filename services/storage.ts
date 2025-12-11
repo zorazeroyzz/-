@@ -3,7 +3,8 @@ import { CommissionData, Preset } from '../types';
 
 const DB_NAME = 'DohnaCommissionDB';
 const STORE_NAME = 'presets';
-const DB_VERSION = 2;
+// Increment version to trigger onupgradeneeded
+const DB_VERSION = 3;
 
 // --- Local IndexedDB Helper ---
 export const initDB = (): Promise<IDBDatabase> => {
@@ -13,14 +14,23 @@ export const initDB = (): Promise<IDBDatabase> => {
       return;
     }
     const request = indexedDB.open(DB_NAME, DB_VERSION);
+    
     request.onerror = () => reject(request.error);
+    
     request.onsuccess = () => resolve(request.result);
+    
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        store.createIndex('userId', 'userId', { unique: false });
+      
+      // FIX: If the store exists (from a previous bad schema), delete it.
+      // This ensures we recreate it with the correct 'keyPath: id' configuration.
+      if (db.objectStoreNames.contains(STORE_NAME)) {
+        db.deleteObjectStore(STORE_NAME);
       }
+      
+      // Create the store with in-line keys (keyPath)
+      const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      store.createIndex('userId', 'userId', { unique: false });
     };
   });
 };
