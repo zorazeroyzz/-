@@ -1,27 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 
 const getClient = () => {
-  let apiKey: string | undefined;
-  
-  try {
-    // Safely attempt to access process.env
-    apiKey = process.env.API_KEY;
-  } catch (e) {
-    console.warn("process.env access failed, checking import.meta.env");
-  }
-
-  // Fallback for Vite environments if process.env failed or was empty
+  const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    try {
-      // @ts-ignore
-      apiKey = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
-    } catch (e) {
-      // Ignore
-    }
-  }
-
-  if (!apiKey) {
-    throw new Error("API Key not found. Please set VITE_API_KEY or process.env.API_KEY.");
+    throw new Error("API Key not found. Please set process.env.API_KEY.");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -70,3 +52,58 @@ export const enhanceDescription = async (text: string): Promise<string> => {
     return text;
   }
 }
+
+export const generateDohnaStyleAvatar = async (base64Image: string): Promise<string> => {
+  try {
+    const ai = getClient();
+    
+    // Remove header if present
+    const cleanBase64 = base64Image.split(',')[1] || base64Image;
+
+    const prompt = `
+      Transform this image into the specific art style of the game "Dohna Dohna wa Uta" (Alicesoft).
+      Key characteristics:
+      - Thick, varied line weight (black outlines).
+      - Flat, high-saturation coloring (Hot Pink, Cyan, Yellow).
+      - Pop-art, vector illustration aesthetic.
+      - "Trash Candy" vibe.
+      - 2D Anime style, very crisp, no blurring.
+      - Keep the character composition but make it look like a sticker from the game.
+      - White background.
+    `;
+
+    // Using gemini-3-pro-image-preview (Nano Banana Pro) as requested for high quality style transfer
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-image-preview',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: 'image/png',
+              data: cleanBase64
+            }
+          },
+          { text: prompt }
+        ]
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: '1:1',
+          imageSize: '1K'
+        }
+      }
+    });
+
+    // Extract image
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    }
+    
+    throw new Error("No image generated");
+  } catch (error) {
+    console.error("Dohna Gen Error:", error);
+    throw error;
+  }
+};

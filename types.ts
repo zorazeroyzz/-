@@ -21,9 +21,9 @@ export interface CommissionData {
   tags: string[];
   contactInfo: string;
   pricing: PricingItem[];
-  exhibitionImages: ImageItem[]; // Updated type
-  mainImages: ImageItem[]; // Updated type
-  avatar: string; // User avatar
+  exhibitionImages: ImageItem[]; 
+  mainImages: ImageItem[]; 
+  avatar: string; 
   
   // Positions for draggable header elements
   avatarPosition: { x: number; y: number };
@@ -36,17 +36,21 @@ export interface CommissionData {
   avatarScale: number;
   statusScale: number;
 
-  qrCodeQQ: string; // QQ QR Code
-  qrCodeWeChat: string; // WeChat QR Code
+  qrCodeQQ: string; 
+  qrCodeWeChat: string; 
   
-  // Contact section styling
+  // Contact BG
   contactBackgroundImage: string;
   contactBackgroundOpacity: number;
   contactBackgroundPosition: { x: number; y: number };
   contactBackgroundScale: number;
 
   notice: string; 
-  themeColor: 'pink' | 'yellow' | 'blue' | 'red' | 'purple' | 'green' | 'cyan' | 'orange';
+  themeColor: 'pink' | 'yellow' | 'blue' | 'red' | 'purple' | 'green';
+  titleFont: string; 
+  titleColor: string;        // Primary Fill Color
+  titleColorSecondary?: string; // New: Secondary Fill Color for Alternating Effect
+  titleShadowColor: string;  // Shadow Color (or 'auto')
   
   // Visibility flags
   showPortfolio: boolean;
@@ -55,7 +59,7 @@ export interface CommissionData {
   showContact: boolean;
 
   // Spacing controls
-  spacingHeader: number;      // Bottom padding of header
+  spacingHeader: number;      
   spacingPortfolio: number;
   spacingPricing: number;
   spacingNotice: number;
@@ -70,10 +74,9 @@ export interface Preset {
 }
 
 export type ThemeColors = {
-  primary: string;   // Main Neon (Borders, Highlights)
-  secondary: string; // Header Background (Dark/Tinted)
-  accent: string;    // Clashing Color (Badges, Special Text)
-  text: string;      // Header Text Color
-  bg: string;        // Web App Background (for preview context)
-  gradient: string;
+  color1: string;   // Main (e.g., Pink)
+  color2: string;   // Sub (e.g., Blue)
+  color3: string;   // Accent (e.g., Yellow)
+  bg: string;       // Background color
+  pattern: string;  // CSS class for pattern
 };

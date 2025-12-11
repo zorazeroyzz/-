@@ -1,7 +1,8 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { CommissionData, ThemeColors, ImageItem } from '../types';
-import { THEMES } from '../constants';
-import { AlertTriangle, Hash, Camera, Move, ZoomIn, Trash2 } from 'lucide-react';
+import { THEMES, FONT_OPTIONS } from '../constants';
+import { AlertTriangle, ZoomIn, Camera, Star, Zap, Heart, Crosshair, Skull, Radio, Activity, Hexagon, Eye, QrCode } from 'lucide-react';
 
 interface PreviewCardProps {
   data: CommissionData;
@@ -18,8 +19,272 @@ interface EditableImageProps {
   listType: 'exhibitionImages' | 'mainImages';
   onUpdate: (list: 'exhibitionImages' | 'mainImages', index: number, updates: Partial<ImageItem>) => void;
   scaleFactor: number;
-  theme: ThemeColors;
 }
+
+// --- DOHNA MOTION BACKGROUND (REMASTERED) ---
+const DohnaMotionBackground: React.FC<{ theme: ThemeColors, themeName: string }> = ({ theme, themeName }) => {
+  
+  // 1. Precise Color Logic for High Contrast
+  const colors = useMemo(() => {
+    // === CLASSIC PINK (Cyan BG + Pink Stripe) ===
+    if (themeName === 'pink') {
+        return {
+            bg: '#2be0ed',         // Dohna Cyan
+            dot: '#0099dd',        // Darker blue
+            stripe: '#e6007a',     // Hot Pink
+            stripeShadow: '#000000',
+            elements: ['#ffff00', '#ffffff', '#1a051d'], 
+            accent: '#ffff00'
+        };
+    }
+    // === ELECTRIC YELLOW (Dark Purple BG + Yellow Stripe) ===
+    if (themeName === 'yellow') {
+        return {
+            bg: '#2a0a2e',        // Dark Purple
+            dot: '#4a1a4e',       
+            stripe: '#ffe600',    // Yellow
+            stripeShadow: '#000000',
+            elements: ['#e6007a', '#00ccff', '#ffffff'],
+            accent: '#e6007a'
+        };
+    }
+    // === CYBER BLUE (White/Light Grey BG + Blue Stripe) ===
+    if (themeName === 'blue') {
+        return {
+            bg: '#f0f0f0',        // Light Grey
+            dot: '#d0d0d0',
+            stripe: '#0099dd',    // Blue
+            stripeShadow: '#000000',
+            elements: ['#ffff00', '#ff0055', '#000000'],
+            accent: '#ffff00'
+        };
+    }
+    // === TOXIC GREEN (Deep Purple BG + Acid Green Stripe) ===
+    if (themeName === 'green') {
+        return {
+            bg: '#4b0082',        // Indigo/Purple
+            dot: '#300055',
+            stripe: '#39ff14',    // Acid Green
+            stripeShadow: '#000000',
+            elements: ['#ffffff', '#ff0055', '#39ff14'],
+            accent: '#ff0055'
+        };
+    }
+    // === WARNING RED (Cyan BG + Red Stripe - High Contrast) ===
+    if (themeName === 'red') {
+        return {
+            bg: '#00ffff',        // Cyan
+            dot: '#00cccc',
+            stripe: '#ff2a2a',    // Red
+            stripeShadow: '#000000',
+            elements: ['#ffffff', '#000000', '#ffff00'],
+            accent: '#ffffff'
+        };
+    }
+    // === HYPNO PURPLE (Acid Green BG + Purple Stripe) ===
+    if (themeName === 'purple') {
+        return {
+            bg: '#ccff00',        // Acid Yellow/Green
+            dot: '#aacc00',
+            stripe: '#bf00ff',    // Purple
+            stripeShadow: '#000000',
+            elements: ['#ffffff', '#000000', '#bf00ff'],
+            accent: '#000000'
+        };
+    }
+
+    // === FALLBACK (Uses theme colors but ensures structure) ===
+    return {
+        bg: theme.bg,
+        dot: 'rgba(0,0,0,0.1)',
+        stripe: theme.color1,
+        stripeShadow: '#000000',
+        elements: [theme.color2, theme.color3, '#ffffff'],
+        accent: theme.color3
+    };
+  }, [themeName, theme]);
+
+  // 2. Generate Structured Geometric Elements
+  const elements = useMemo(() => {
+    const vWidth = 1000;
+    const vHeight = 1400;
+    
+    // Stripe Logic
+    const stripeAngle = -30;
+    const stripeY = 600;
+    const stripeHeight = 450;
+
+    const shapes: Array<{
+        id: string; 
+        type: 'capsule' | 'cross' | 'ring' | 'line';
+        x: number; 
+        y: number; 
+        w: number; 
+        h: number; 
+        color: string; 
+        zIndex: number; // 0=Behind Stripe, 1=Front
+    }> = [];
+
+    // Helper
+    const rand = (min: number, max: number) => Math.random() * (max - min) + min;
+    const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
+    // >> LAYER 1: Background Elements (Sparse, large)
+    for (let i = 0; i < 8; i++) {
+        shapes.push({
+            id: `bg-${i}`,
+            type: Math.random() > 0.5 ? 'ring' : 'cross',
+            x: rand(0, vWidth),
+            y: rand(0, stripeY - 200),
+            w: rand(40, 80),
+            h: rand(40, 80),
+            color: colors.dot, // Subtle blending
+            zIndex: 0
+        });
+    }
+
+    // >> LAYER 2: The "Rain" inside/near the Stripe
+    // We create "Lanes" to avoid messy overlap
+    const laneCount = 5;
+    const laneHeight = stripeHeight / laneCount;
+    
+    for (let l = 0; l < laneCount; l++) {
+        const laneY = stripeY - stripeHeight/2 + (l * laneHeight);
+        
+        // Items per lane
+        const count = Math.floor(rand(3, 6)); 
+        for (let k = 0; k < count; k++) {
+            const isSpeedLine = Math.random() > 0.7;
+            const w = isSpeedLine ? rand(300, 600) : rand(60, 180);
+            const h = isSpeedLine ? rand(4, 8) : rand(20, 35);
+            
+            shapes.push({
+                id: `rain-${l}-${k}`,
+                type: isSpeedLine ? 'line' : 'capsule',
+                x: rand(-200, vWidth + 200),
+                y: laneY + rand(10, laneHeight - 10),
+                w: w,
+                h: h,
+                color: pick(colors.elements),
+                zIndex: 1
+            });
+        }
+    }
+
+    // >> LAYER 3: Decorative Clusters (The "Pop" feel)
+    for (let i = 0; i < 5; i++) {
+        const cx = rand(100, vWidth - 100);
+        const cy = rand(stripeY - 100, stripeY + 200);
+        shapes.push({
+            id: `dec-${i}`,
+            type: 'cross',
+            x: cx,
+            y: cy,
+            w: 40,
+            h: 40,
+            color: colors.accent,
+            zIndex: 1
+        });
+    }
+
+    return { shapes, stripeY, stripeHeight, stripeAngle };
+  }, [colors]);
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none z-0" style={{ backgroundColor: colors.bg }}>
+      <svg 
+        className="absolute inset-0 w-full h-full" 
+        preserveAspectRatio="xMidYMid slice"
+        viewBox="0 0 750 1000"
+      >
+        <defs>
+            {/* HALFTONE PATTERN: The soul of pop art */}
+            <pattern id="halftone-dot" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                <circle cx="10" cy="10" r="3" fill={colors.dot} opacity="0.4" />
+            </pattern>
+            {/* STRIPE PATTERN: Subtle lines inside the main stripe */}
+            <pattern id="stripe-line" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
+                 <line x1="0" y1="10" x2="10" y2="0" stroke="rgba(0,0,0,0.1)" strokeWidth="2" />
+            </pattern>
+        </defs>
+
+        {/* 1. Background Texture */}
+        <rect x="0" y="0" width="100%" height="100%" fill="url(#halftone-dot)" />
+
+        {/* GLOBAL ROTATION GROUP */}
+        <g transform={`rotate(${elements.stripeAngle}, 375, 500)`}>
+            
+            {/* 2. Background Decor Shapes */}
+            {elements.shapes.filter(s => s.zIndex === 0).map(s => (
+                <g key={s.id} opacity="0.6">
+                    {s.type === 'cross' && (
+                        <path d={`M${s.x} ${s.y} h${s.w} M${s.x + s.w/2} ${s.y - s.h/2} v${s.h}`} stroke={s.color} strokeWidth="12" strokeLinecap="round" />
+                    )}
+                    {s.type === 'ring' && (
+                        <circle cx={s.x} cy={s.y} r={s.w/2} stroke={s.color} strokeWidth="8" fill="none" />
+                    )}
+                </g>
+            ))}
+
+            {/* 3. THE MAIN STRIPE (With Solid Hard Shadow) */}
+            {/* Shadow */}
+            <rect 
+                x="-500" y={elements.stripeY - elements.stripeHeight/2 + 20} 
+                width="2000" height={elements.stripeHeight} 
+                fill={colors.stripeShadow} 
+            />
+            {/* Main Body */}
+            <rect 
+                x="-500" y={elements.stripeY - elements.stripeHeight/2} 
+                width="2000" height={elements.stripeHeight} 
+                fill={colors.stripe} 
+            />
+            {/* Inner Texture */}
+            <rect 
+                 x="-500" y={elements.stripeY - elements.stripeHeight/2} 
+                 width="2000" height={elements.stripeHeight} 
+                 fill="url(#stripe-line)"
+            />
+            {/* Top/Bottom Accents */}
+            <rect x="-500" y={elements.stripeY - elements.stripeHeight/2 + 10} width="2000" height="5" fill="rgba(255,255,255,0.3)" />
+            <rect x="-500" y={elements.stripeY + elements.stripeHeight/2 - 15} width="2000" height="5" fill="rgba(0,0,0,0.2)" />
+
+
+            {/* 4. FOREGROUND ELEMENTS (Rain/Capsules/Decor) */}
+            {elements.shapes.filter(s => s.zIndex === 1).map(s => (
+                <g key={s.id}>
+                    {/* Shadow Layer (Offset by 6px) */}
+                    {s.type === 'capsule' && (
+                        <rect x={s.x + 6} y={s.y + 6} width={s.w} height={s.h} rx={s.h/2} fill="black" />
+                    )}
+                    {s.type === 'cross' && (
+                         <path d={`M${s.x+6} ${s.y+6} h${s.w} M${s.x+6 + s.w/2} ${s.y+6 - s.h/2} v${s.h}`} stroke="black" strokeWidth="12" strokeLinecap="square" />
+                    )}
+                    
+                    {/* Object Layer */}
+                    {s.type === 'capsule' && (
+                        <rect x={s.x} y={s.y} width={s.w} height={s.h} rx={s.h/2} fill={s.color} />
+                    )}
+                    {s.type === 'line' && (
+                        <rect x={s.x} y={s.y} width={s.w} height={s.h} fill={s.color} opacity="0.9" />
+                    )}
+                    {s.type === 'cross' && (
+                         <path d={`M${s.x} ${s.y} h${s.w} M${s.x + s.w/2} ${s.y - s.h/2} v${s.h}`} stroke={s.color} strokeWidth="12" strokeLinecap="square" />
+                    )}
+                </g>
+            ))}
+        </g>
+      </svg>
+      
+      {/* 5. VINTAGE NOISE (Essential Texture) */}
+      <div className="absolute inset-0 bg-noise opacity-[0.12] mix-blend-multiply pointer-events-none"></div>
+      
+      {/* 6. VIGNETTE (Focus Center) */}
+      <div className="absolute inset-0 shadow-[inset_0_0_150px_rgba(0,0,0,0.25)] pointer-events-none"></div>
+    </div>
+  );
+};
+
 
 // Optimized Image Component with Local State
 const EditableImage: React.FC<EditableImageProps> = React.memo(({ 
@@ -27,10 +292,8 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
   index, 
   listType, 
   onUpdate, 
-  scaleFactor,
-  theme
+  scaleFactor
 }) => {
-  // Local state for smooth performance without re-rendering the whole app
   const [localState, setLocalState] = useState({
     x: item.x,
     y: item.y,
@@ -41,7 +304,6 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
   const dragStartRef = useRef<{x: number, y: number} | null>(null);
   const initialPosRef = useRef<{x: number, y: number} | null>(null);
 
-  // Sync local state if props change externally (e.g. initial load or reset)
   useEffect(() => {
     setLocalState({
       x: item.x,
@@ -51,17 +313,7 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
   }, [item.x, item.y, item.scale]);
 
   const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
-    // Stop propagation to prevent parent handlers
     e.stopPropagation();
-    
-    // On touch, prevent default to stop browser scrolling/zooming gestures while dragging
-    if (e.type === 'touchstart' && e.cancelable) {
-       // Note: We might want to allow default if we are not strictly dragging, 
-       // but for this UI, touching the image usually means drag intent.
-       // However, to be safe, we often rely on the move event to prevent default.
-       // But preventing start is sometimes needed for older browsers or specific behaviors.
-    }
-
     setIsDragging(true);
     
     const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
@@ -75,18 +327,12 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
     const handleMove = (e: MouseEvent | TouchEvent) => {
       if (!isDragging || !dragStartRef.current || !initialPosRef.current) return;
       
-      // Prevent scrolling on mobile while dragging
-      if (e.type === 'touchmove' && e.cancelable) {
-        e.preventDefault();
-      }
-      
       const clientX = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
       const clientY = 'touches' in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
 
       const dx = (clientX - dragStartRef.current.x) / scaleFactor;
       const dy = (clientY - dragStartRef.current.y) / scaleFactor;
 
-      // Update local state only (FAST)
       setLocalState(prev => ({
         ...prev,
         x: initialPosRef.current!.x + dx,
@@ -97,7 +343,6 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
     const handleEnd = () => {
       if (isDragging) {
         setIsDragging(false);
-        // Commit changes to global state (SLOW but only once)
         onUpdate(listType, index, {
           x: localState.x,
           y: localState.y
@@ -119,13 +364,11 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
     };
   }, [isDragging, scaleFactor, listType, index, onUpdate, localState.x, localState.y]);
 
-  // Handle Slider Change for Zoom
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newScale = parseFloat(e.target.value);
     setLocalState(prev => ({ ...prev, scale: newScale }));
   };
 
-  // Commit Slider Change on Mouse Up
   const handleSliderCommit = () => {
     onUpdate(listType, index, { scale: localState.scale });
   };
@@ -140,19 +383,12 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
 
   return (
     <div 
-      className={`relative group bg-white shadow-sm overflow-hidden ${getGridClasses()}`}
-      style={{ border: `1px solid ${theme.secondary}` }}
+      className={`relative group bg-white overflow-hidden border-2 border-black ${getGridClasses()}`}
     >
-        {/* Controls Overlay (Only Visible on Hover) */}
-        <div className="absolute bottom-0 left-0 right-0 p-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between gap-2 pointer-events-auto">
-           {/* Move Icon Indicator */}
-           <div className="text-white text-[10px] font-mono flex items-center gap-1 opacity-70">
-              <Move size={10} />
-           </div>
-
-           {/* Zoom Slider */}
-           <div className="flex items-center gap-2 flex-1 max-w-[60%]">
-              <ZoomIn size={10} className="text-white" />
+        {/* Controls Overlay */}
+        <div className="absolute top-0 right-0 p-1 z-30 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto bg-[var(--color-accent)] border-l-2 border-b-2 border-black">
+           <div className="flex items-center gap-1">
+              <ZoomIn size={12} className="text-black" />
               <input 
                 type="range" 
                 min="0.1" 
@@ -162,7 +398,7 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
                 onChange={handleSliderChange}
                 onMouseUp={handleSliderCommit}
                 onTouchEnd={handleSliderCommit}
-                className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                className="w-16 h-2 bg-black rounded-none appearance-none cursor-pointer"
                 onMouseDown={(e) => e.stopPropagation()} 
                 onTouchStart={(e) => e.stopPropagation()} 
               />
@@ -170,10 +406,10 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
         </div>
 
         {/* The visual image */}
-        <div className="w-full h-full bg-gray-100"> 
+        <div className="w-full h-full bg-gray-200"> 
             <img 
               src={item.url} 
-              className="w-full block cursor-move relative z-10 origin-center will-change-transform" 
+              className="w-full h-full object-cover block cursor-move relative z-10 origin-center will-change-transform" 
               alt="Portfolio" 
               style={{ 
                 transform: `translate(${localState.x}px, ${localState.y}px) scale(${localState.scale})`,
@@ -189,20 +425,22 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
 });
 
 const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, onPosChange, onImageUpdate, onScaleChange }) => {
-  const theme = THEMES[data.themeColor];
+  // SAFETY: Default to pink theme if data.themeColor is undefined or invalid
+  const theme = THEMES[data.themeColor] || THEMES.pink;
   
+  // Resolve Font
+  const selectedFont = FONT_OPTIONS.find(f => f.id === data.titleFont) || FONT_OPTIONS[0];
+
+  // Resolve Title Colors
+  const titleFill = data.titleColor || '#ffffff';
+  const titleShadow = data.titleShadowColor === 'auto' || !data.titleShadowColor ? theme.color1 : data.titleShadowColor;
+
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const dragStartRef = useRef<{x: number, y: number} | null>(null);
   const initialPosRef = useRef<{x: number, y: number} | null>(null);
 
   const handleHeaderStart = (e: React.MouseEvent | React.TouchEvent, id: string) => {
     e.stopPropagation();
-    if (e.type === 'touchstart' && e.cancelable) {
-      // e.preventDefault(); 
-      // Often better not to preventDefault on start for header items unless we are sure, 
-      // but for consistency with drag:
-    }
-    
     setDraggedId(id);
     const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
@@ -224,10 +462,6 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
     const handleMove = (e: MouseEvent | TouchEvent) => {
       if (!draggedId || !dragStartRef.current || !initialPosRef.current) return;
       
-      if (e.type === 'touchmove' && e.cancelable) {
-        e.preventDefault();
-      }
-
       const clientX = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
       const clientY = 'touches' in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
 
@@ -260,246 +494,254 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
     };
   }, [draggedId, scaleFactor, onPosChange]);
 
-  const ImageGrid = React.useMemo(() => ({ images, listType, title }: { images: ImageItem[], listType: 'exhibitionImages' | 'mainImages', title: string }) => (
-    <div className="mb-4">
-      <div className="flex items-center gap-2 mb-2 px-6">
-          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.primary }}></span>
-          <h4 className="text-sm font-bold uppercase tracking-widest text-gray-500">{title}</h4>
-          <div className="h-[1px] flex-1 bg-gray-200"></div>
+  const ImageGrid = React.useMemo(() => ({ images, listType, title, borderColor }: { images: ImageItem[], listType: 'exhibitionImages' | 'mainImages', title: string, borderColor: string }) => (
+    <div className="mb-6 relative">
+      <div className="flex items-center gap-2 mb-2 pl-2 border-l-8" style={{ borderColor: borderColor }}>
+        <h4 className="text-2xl font-black italic text-black font-dohna" style={{ color: borderColor, textShadow: '1px 1px 0 #000' }}>
+            {title}
+        </h4>
+        <div className="flex-1 h-0.5 bg-black"></div>
       </div>
       
-      {images.length > 0 ? (
-        <div className={`grid gap-1 px-1 ${listType === 'mainImages' ? 'grid-cols-4' : 'grid-cols-3'}`}>
-          {images.map((item, i) => (
-             <EditableImage 
-               key={item.id} 
-               item={item} 
-               index={i} 
-               listType={listType}
-               onUpdate={onImageUpdate} 
-               scaleFactor={scaleFactor}
-               theme={theme}
-             />
-          ))}
-        </div>
-      ) : (
-        <div className="mx-6 border-2 border-dashed h-24 flex flex-col items-center justify-center bg-gray-50 rounded-sm"
-             style={{ borderColor: `${theme.primary}40`, color: theme.secondary }}>
-          <span className="text-xs font-bold opacity-50">Upload Images Here</span>
-        </div>
-      )}
+      <div className="bg-white border-2 border-black p-4 shadow-hard">
+        {images.length > 0 ? (
+          <div className={`grid gap-2 ${listType === 'mainImages' ? 'grid-cols-4' : 'grid-cols-3'}`}>
+            {images.map((item, i) => (
+               <EditableImage 
+                 key={item.id} 
+                 item={item} 
+                 index={i} 
+                 listType={listType}
+                 onUpdate={onImageUpdate} 
+                 scaleFactor={scaleFactor}
+               />
+            ))}
+          </div>
+        ) : (
+          <div className="border-2 border-dashed border-gray-300 h-24 flex flex-col items-center justify-center bg-gray-50">
+            <span className="text-sm font-bold text-gray-400">NO SIGNAL // UPLOAD</span>
+          </div>
+        )}
+      </div>
     </div>
-  ), [theme, scaleFactor, onImageUpdate]);
+  ), [scaleFactor, onImageUpdate]);
+
 
   return (
-    <div className="w-full flex justify-center py-8 bg-gray-900/50">
+    <div className="w-full flex justify-center py-8">
+      {/* Background Container for the Card */}
       <div 
         ref={innerRef}
-        className="relative w-[750px] bg-white flex flex-col font-sans shadow-2xl"
-        style={{ backgroundColor: '#ffffff' }}
+        className="relative w-[750px] flex flex-col font-sans overflow-hidden bg-white"
+        style={{ 
+            minHeight: '1000px',
+            '--color-main': theme.color1,
+            '--color-sub': theme.color2,
+            '--color-accent': theme.color3
+        } as React.CSSProperties}
       >
+        {/* === NEW DOHNA MOTION BACKGROUND (REMASTERED) === */}
+        <DohnaMotionBackground theme={theme} themeName={data.themeColor} />
+
         {/* === HEADER AREA === */}
-        <div className="relative overflow-hidden z-10"
-             style={{ 
-               backgroundColor: theme.secondary, 
-               color: theme.text,
-               paddingBottom: `${24 + data.spacingHeader}px` 
-             }}>
-          
-          {/* Abstract BG */}
-          <div className="absolute inset-0 opacity-20 pointer-events-none" 
-               style={{ 
-                  backgroundImage: `
-                    linear-gradient(45deg, ${theme.primary} 25%, transparent 25%, transparent 75%, ${theme.primary} 75%, ${theme.primary}), 
-                    linear-gradient(45deg, ${theme.primary} 25%, transparent 25%, transparent 75%, ${theme.primary} 75%, ${theme.primary})
-                  `,
-                  backgroundSize: '20px 20px',
-                  backgroundPosition: '0 0, 10px 10px'
-               }} 
-          />
-          
-          <div className="relative z-10 px-6 pt-6">
+        <div className="relative z-10 p-8 pb-0" style={{ marginBottom: `${data.spacingHeader}px` }}>
             
-            <div className="flex justify-between items-start">
-               {/* 1. SYSTEM STATUS */}
+            {/* NAME TITLE */}
+            <div 
+              className="relative cursor-move group w-full z-30 mb-8"
+              style={{ transform: `translate(${data.titlePosition.x}px, ${data.titlePosition.y}px)` }}
+              onMouseDown={(e) => handleHeaderStart(e, 'title')}
+              onTouchStart={(e) => handleHeaderStart(e, 'title')}
+            >
+              <h1 className="text-[6.5rem] leading-none font-black italic relative z-10 w-full text-center text-stroke-heavy tracking-tighter"
+                  style={{ 
+                    // Parent color is fallback or used for stroke context
+                    color: titleFill, 
+                    dropShadow: `8px 8px 0 ${titleShadow}`,
+                    fontFamily: selectedFont.family,
+                  }}>
+                  <span className="relative inline-block" style={{ transform: 'skewX(-10deg)' }}>
+                     {/* Coloring Logic: Tokenized Segments for Alternating Colors */}
+                     {(() => {
+                        // Regex splits by separators (keeping separators due to capturing group)
+                        // Hyphen moved to end of class to prevent range error
+                        const regex = /([ :：/／|｜\\.,_>+~=!"'’‘“”;；[\]{}()（）-]+)/;
+                        const parts = data.photographerName.split(regex);
+                        
+                        let textIndex = 0;
+                        
+                        return parts.map((part, i) => {
+                            if (!part) return null;
+                            
+                            const isPunctuation = regex.test(part);
+                            
+                            let color;
+                            if (isPunctuation) {
+                                color = '#ffffff'; // Punctuation Fixed White
+                            } else {
+                                // Alternate Text Groups: Primary -> Secondary -> Primary...
+                                // Fallback to theme.color3 (Accent) if secondary not set, ensuring contrast.
+                                const primary = titleFill;
+                                const secondary = data.titleColorSecondary || theme.color3;
+                                
+                                color = textIndex % 2 === 0 ? primary : secondary;
+                                textIndex++;
+                            }
+                            
+                            return <span key={i} style={{ color }}>{part}</span>;
+                        });
+                     })()}
+                  </span>
+              </h1>
+            </div>
+
+            <div className="flex justify-between items-start relative px-4">
+               {/* STATUS STICKER */}
                <div 
-                 className="flex flex-col gap-1 cursor-move group relative z-30"
+                 className="flex flex-col cursor-move group relative z-30 -rotate-6"
                  style={{ transform: `translate(${data.statusPosition.x}px, ${data.statusPosition.y}px) scale(${data.statusScale})` }}
                  onMouseDown={(e) => handleHeaderStart(e, 'status')}
                  onTouchStart={(e) => handleHeaderStart(e, 'status')}
                  onWheel={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-                    onScaleChange('status', Math.max(0.5, Math.min(3, data.statusScale + delta)));
+                    e.stopPropagation(); e.preventDefault();
+                    onScaleChange('status', Math.max(0.5, Math.min(3, data.statusScale + (e.deltaY > 0 ? -0.1 : 0.1))));
                  }}
                >
-                 <div className="absolute -top-3 left-0 bg-pink-500 text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                    <Move size={8} className="inline mr-1"/>MOVE <ZoomIn size={8} className="inline ml-1"/>ZOOM (Wheel)
-                 </div>
-                 <div className="px-2 py-0.5 font-black text-xs tracking-widest uppercase transform -skew-x-12 border w-fit shadow-md"
-                      style={{ backgroundColor: theme.primary, color: theme.secondary, borderColor: theme.text }}>
-                    摄影接单
+                 <div className="bg-[var(--color-accent)] border-4 border-black px-8 py-2 shadow-hard-xl">
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-black rounded-full animate-pulse"></div>
+                        <span className="text-3xl font-black text-black font-dohna tracking-widest italic">OPEN NOW</span>
+                    </div>
                  </div>
                </div>
 
-               {/* 2. AVATAR */}
+               {/* AVATAR */}
                <div 
-                  className="relative w-32 h-32 shrink-0 group z-20 cursor-move"
+                  className="relative w-48 h-48 shrink-0 group z-20 cursor-move"
                   style={{ transform: `translate(${data.avatarPosition.x}px, ${data.avatarPosition.y}px) scale(${data.avatarScale})` }}
                   onMouseDown={(e) => handleHeaderStart(e, 'avatar')}
                   onTouchStart={(e) => handleHeaderStart(e, 'avatar')}
                   onWheel={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-                    onScaleChange('avatar', Math.max(0.5, Math.min(3, data.avatarScale + delta)));
+                    e.stopPropagation(); e.preventDefault();
+                    onScaleChange('avatar', Math.max(0.5, Math.min(3, data.avatarScale + (e.deltaY > 0 ? -0.1 : 0.1))));
                   }}
                >
-                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black/50 text-white text-[10px] px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                    <Move size={8} className="inline mr-1"/>Drag <ZoomIn size={8} className="inline ml-1"/>Zoom (Wheel)
-                  </div>
-
-                  <div className="absolute inset-0 rotate-6 border-2 transition-transform group-hover:rotate-12 shadow-lg pointer-events-none" 
-                       style={{ borderColor: theme.primary, backgroundColor: theme.text }}></div>
-                  <div className="absolute inset-0 -rotate-3 border-2 overflow-hidden transition-transform group-hover:-rotate-0 shadow-lg pointer-events-none"
-                       style={{ borderColor: theme.text, backgroundColor: theme.secondary }}>
+                  {/* Decorative Backplates */}
+                  <div className="absolute top-3 left-3 w-full h-full bg-[var(--color-sub)] border-4 border-black"></div>
+                  <div className="absolute -top-3 -left-3 w-full h-full bg-[var(--color-main)] border-4 border-black"></div>
+                  
+                  {/* Image container */}
+                  <div className="absolute inset-0 bg-white border-4 border-black overflow-hidden shadow-[4px_4px_0_rgba(0,0,0,0.5)]">
                     {data.avatar ? (
                       <img src={data.avatar} className="w-full h-full object-cover" alt="Avatar" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center opacity-50">
-                        <Camera size={32} color={theme.text} />
+                      <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                        <Camera size={32} className="text-black" />
                       </div>
                     )}
                   </div>
                </div>
             </div>
 
-            {/* 3. Main Title */}
+            {/* SLOGAN */}
             <div 
-              className="mt-2 relative cursor-move group w-fit z-30"
-              style={{ transform: `translate(${data.titlePosition.x}px, ${data.titlePosition.y}px)` }}
-              onMouseDown={(e) => handleHeaderStart(e, 'title')}
-              onTouchStart={(e) => handleHeaderStart(e, 'title')}
-            >
-               <div className="absolute -top-6 left-0 bg-pink-500 text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                  <Move size={8} className="inline mr-1"/>MOVE
-               </div>
-              <h1 className="text-6xl font-black italic tracking-tighter leading-none relative z-10 drop-shadow-md"
-                  style={{ 
-                    fontFamily: '"Noto Sans SC", sans-serif', 
-                    textShadow: `2px 2px 0px ${theme.primary}`
-                  }}>
-                {data.photographerName}
-              </h1>
-            </div>
-
-            {/* 4. Slogan Bar */}
-            <div 
-              className="flex items-center gap-2 mt-2 cursor-move group w-fit relative z-30"
+              className="mt-8 cursor-move group w-full flex justify-center z-30"
               style={{ transform: `translate(${data.sloganPosition.x}px, ${data.sloganPosition.y}px)` }}
               onMouseDown={(e) => handleHeaderStart(e, 'slogan')}
               onTouchStart={(e) => handleHeaderStart(e, 'slogan')}
             >
-              <div className="absolute -top-4 left-0 bg-pink-500 text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                  <Move size={8} className="inline mr-1"/>MOVE
-               </div>
-              <div className="h-6 w-1" style={{ backgroundColor: theme.accent }}></div>
-              <p className="text-lg font-bold tracking-wider uppercase italic opacity-90" style={{ color: theme.accent }}>
-                  {data.slogan}
-              </p>
+              <div className="bg-black text-white px-10 py-3 transform skew-x-[-12deg] border-4 border-white shadow-hard" style={{ backgroundColor: '#000' }}>
+                 <p className="text-3xl font-black font-dohna tracking-wider transform skew-x-[12deg]">
+                    {data.slogan} <span className="text-[var(--color-accent)]">//</span>
+                 </p>
+              </div>
             </div>
 
-            {/* 5. Tags */}
+            {/* TAGS */}
             <div 
-              className="mt-4 cursor-move group relative w-fit z-30"
+              className="mt-8 cursor-move group w-full flex justify-center z-30"
               style={{ transform: `translate(${data.tagsPosition.x}px, ${data.tagsPosition.y}px)` }}
               onMouseDown={(e) => handleHeaderStart(e, 'tags')}
               onTouchStart={(e) => handleHeaderStart(e, 'tags')}
             >
-               <div className="absolute -top-4 left-0 bg-pink-500 text-white text-[8px] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                  <Move size={8} className="inline mr-1"/>MOVE
-               </div>
-              
-               <div className="flex items-center gap-3">
-                  <span className="text-2xl font-black italic tracking-tighter" 
-                        style={{ 
-                            color: theme.text, 
-                            textShadow: `2px 2px 0px ${theme.primary}`,
-                            WebkitTextStroke: `1px ${theme.secondary}`
-                        }}>
-                      互勉题材
-                  </span>
-
-                  <div className="flex flex-wrap gap-2">
-                    {data.tags.map((tag, i) => (
-                      <span key={i} 
-                        className="px-3 py-1 font-bold text-base border-2 rounded-full flex items-center gap-1 shadow-[2px_2px_0px_rgba(0,0,0,0.5)]"
-                        style={{ backgroundColor: theme.secondary, borderColor: theme.primary, color: theme.text }}>
-                        <Hash size={14} style={{ color: theme.accent }} />
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
+               <div className="flex flex-wrap gap-4 justify-center max-w-xl">
+                  {data.tags.map((tag, i) => (
+                    <div key={i} className="relative group hover:-translate-y-1 transition-transform">
+                        <div className="absolute inset-0 bg-black translate-x-1 translate-y-1"></div>
+                        <span 
+                          className="relative block px-6 py-1 font-black text-xl border-4 border-black bg-white text-black font-dohna">
+                          #{tag}
+                        </span>
+                    </div>
+                  ))}
                </div>
             </div>
-          </div>
-          
-          <div className="absolute bottom-0 left-0 w-full h-6" 
-               style={{ 
-                 background: '#ffffff', 
-                 clipPath: 'polygon(0 100%, 100% 100%, 100% 0, 95% 40%, 90% 0, 85% 40%, 80% 0, 75% 40%, 70% 0, 65% 40%, 60% 0, 55% 40%, 50% 0, 45% 40%, 40% 0, 35% 40%, 30% 0, 25% 40%, 20% 0, 15% 40%, 10% 0, 5% 40%, 0 0)' 
-               }}>
-          </div>
         </div>
 
         {/* === MAIN CONTENT === */}
-        <div className="pb-6 relative z-0">
+        <div className="p-8 relative z-20">
            
            {/* 1. IMAGES */}
            {data.showPortfolio && (
-             <div className="relative mt-4" style={{ marginBottom: `${data.spacingPortfolio}px`, zIndex: 10 }}>
-                <div className="grid grid-cols-1 gap-4">
-                   <ImageGrid 
-                      title="EXHIBITION / 漫展" 
-                      listType="exhibitionImages"
-                      images={data.exhibitionImages} 
-                   />
-                   <ImageGrid 
-                      title="MAIN WORK / 正片" 
-                      listType="mainImages"
-                      images={data.mainImages} 
-                   />
-                </div>
+             <div className="relative mt-4" style={{ marginBottom: `${data.spacingPortfolio}px` }}>
+                <ImageGrid 
+                   title="场照 // EXHIBITION.DATA" 
+                   listType="exhibitionImages"
+                   images={data.exhibitionImages} 
+                   borderColor={theme.color1}
+                />
+                <ImageGrid 
+                   title="正片 // MAIN.WORK" 
+                   listType="mainImages"
+                   images={data.mainImages} 
+                   borderColor={theme.color2}
+                />
              </div>
            )}
 
            {/* 2. PRICING */}
            {data.showPricing && (
-             <div className="relative px-6" style={{ marginBottom: `${data.spacingPricing}px`, zIndex: 20 }}>
-                <div className="flex items-center gap-2 mb-4 border-b-2 pb-2" style={{ borderColor: theme.secondary }}>
-                   <span className="text-white px-2 font-bold text-lg italic" style={{ backgroundColor: theme.secondary }}>MENU</span>
-                   <h3 className="text-2xl font-black italic uppercase" style={{ color: theme.secondary }}>PRICE LIST</h3>
+             <div className="relative" style={{ marginBottom: `${data.spacingPricing}px` }}>
+                <div className="flex items-center justify-between border-b-8 border-black mb-8 pb-2">
+                   <h3 
+                    className="text-5xl font-black italic text-black tracking-tighter text-stroke-md drop-shadow-[4px_4px_0_#000]"
+                    style={{ 
+                        fontFamily: selectedFont.family,
+                        color: titleFill, // Also apply custom color here for consistency
+                        textShadow: `4px 4px 0 ${titleShadow}`
+                    }}
+                   >
+                     SERVICE MENU
+                   </h3>
+                   <div className="flex gap-2">
+                      <Star fill="#ffe600" stroke="#ffffff" strokeWidth={3} size={32} />
+                      <Star fill="#ffe600" stroke="#ffffff" strokeWidth={3} size={32} />
+                      <Star fill="#ffe600" stroke="#ffffff" strokeWidth={3} size={32} />
+                   </div>
                 </div>
 
-                <div className="flex flex-col gap-3">
+                <div className="grid gap-6">
                   {data.pricing.map((item, i) => (
-                     <div key={item.id} className="relative">
-                        <div className="bg-white border-l-4 p-3 flex justify-between items-center group hover:-translate-y-1 transition-transform duration-200 border-b border-r border-t border-gray-100 shadow-sm"
-                             style={{ borderLeftColor: theme.primary }}>
-                           <div className="flex-1">
-                              <h4 className="text-xl font-black text-gray-900 flex items-center gap-2">
-                                 {item.title}
-                              </h4>
-                              <p className="font-medium mt-1 text-xs text-gray-500">
-                                {item.desc}
-                              </p>
-                           </div>
-                           <div className="text-right">
-                              <div className="text-2xl font-black italic tracking-tighter" style={{ color: theme.primary }}>
-                                 {item.price}
-                              </div>
-                           </div>
+                     <div key={item.id} className="relative bg-white border-4 border-black p-0 shadow-hard flex group overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-hard-xl">
+                        {/* Left Color Strip */}
+                        <div className="w-6 border-r-4 border-black" style={{ backgroundColor: [theme.color1, theme.color2, theme.color3][i % 3] }}></div>
+                        
+                        <div className="flex-1 p-5 flex items-center justify-between">
+                            <div>
+                               <h4 className="text-3xl font-black italic text-black uppercase font-dohna">{item.title}</h4>
+                               <div className="flex items-center gap-2 mt-2">
+                                  <Zap size={16} fill="#ffe600" className="text-black" />
+                                  <p className="font-bold text-base text-black bg-gray-100 px-3 py-0.5 border-2 border-black rounded-sm">
+                                    {item.desc}
+                                  </p>
+                               </div>
+                            </div>
+                            
+                            <div className="relative">
+                               <div className="bg-black text-white px-6 py-2 transform -rotate-3 border-4 border-white shadow-hard-sm">
+                                  <span className="text-3xl font-black italic font-dohna text-[var(--color-accent)]">{item.price}</span>
+                                </div>
+                            </div>
                         </div>
                      </div>
                   ))}
@@ -509,39 +751,34 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
 
            {/* 3. NOTICE */}
            {data.showNotice && (
-             <div className="relative px-6" style={{ marginBottom: `${data.spacingNotice}px`, zIndex: 30 }}>
-                <div className="text-white p-4 relative overflow-hidden rounded-sm" style={{ backgroundColor: theme.secondary }}>
-                   <div className="absolute top-0 right-0 w-24 h-24 transform rotate-45 translate-x-12 -translate-y-12 opacity-20"
-                        style={{ backgroundColor: theme.accent }}></div>
-                   
-                   <div className="relative z-10 flex items-start gap-3">
-                      <AlertTriangle size={24} style={{ color: theme.accent }} className="flex-shrink-0 mt-1" />
-                      <div className="flex-1">
-                         <h3 className="text-lg font-black uppercase italic border-b pb-1 mb-2 inline-block"
-                             style={{ color: theme.accent, borderColor: theme.accent }}>
-                           NOTICE
-                         </h3>
-                         <div className="whitespace-pre-line font-medium text-xs leading-relaxed opacity-90">
-                            {data.notice || "暂无须知内容..."}
-                         </div>
+             <div className="relative" style={{ marginBottom: `${data.spacingNotice}px` }}>
+                {/* Explicit Yellow/Black Theme for Warning Section */}
+                <div className="bg-black border-4 p-2 relative shadow-hard" style={{ borderColor: '#ffe600' }}>
+                   <div className="border-4 border-dashed p-6" style={{ borderColor: '#ffe600' }}>
+                      <div className="flex items-center gap-3 border-b-4 pb-4 mb-4" style={{ borderColor: '#ffe600' }}>
+                         <AlertTriangle size={48} fill="#ffe600" className="text-black flex-shrink-0" strokeWidth={2.5} />
+                         <h3 className="text-3xl font-black italic text-[#ffe600]">IMPORTANT NOTICE // 须知</h3>
+                      </div>
+                      <div className="font-bold text-lg leading-relaxed text-[#ffe600] whitespace-pre-line font-mono">
+                         {data.notice || "NO CONTENT"}
                       </div>
                    </div>
+                   {/* Decorative corner removed */}
                 </div>
              </div>
            )}
 
-           {/* 4. FOOTER */}
+           {/* 4. CONTACT */}
            {data.showContact && (
-             <div className="pb-4 px-6 relative" style={{ zIndex: 40 }}>
-                <div className="border-2 p-4 text-center relative flex flex-col items-center overflow-hidden" 
-                     style={{ borderColor: theme.secondary, backgroundColor: '#fff' }}>
+             <div className="relative mt-16">
+                <div className="bg-white border-4 border-black relative overflow-hidden flex flex-col items-center p-10 shadow-hard-xl">
                    
                    {data.contactBackgroundImage && (
-                     <div className="absolute inset-0 z-0 overflow-hidden">
+                     <div className="absolute inset-0 z-0">
                         <img 
                            src={data.contactBackgroundImage} 
                            alt="bg"
-                           className="absolute w-full h-auto min-h-full max-w-none cursor-move origin-center"
+                           className="w-full h-full object-cover cursor-move mix-blend-multiply"
                            style={{ 
                                transform: `translate(${data.contactBackgroundPosition?.x || 0}px, ${data.contactBackgroundPosition?.y || 0}px) scale(${data.contactBackgroundScale})`,
                                opacity: data.contactBackgroundOpacity
@@ -550,82 +787,56 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                            onTouchStart={(e) => handleHeaderStart(e, 'contactBg')}
                            draggable={false}
                         />
+                        <div className="absolute inset-0 bg-dohna-dots opacity-10"></div>
                      </div>
                    )}
 
-                   <div className="relative z-10 w-full flex flex-col items-center pointer-events-none">
-                       <h3 className="text-3xl font-black mb-6 italic tracking-tighter drop-shadow-sm" 
-                           style={{ 
-                             color: theme.secondary,
-                             textShadow: `2px 2px 0px ${theme.primary}`
-                           }}>
+                   <div className="relative z-10 w-full flex flex-col items-center">
+                       <h3 
+                        className="text-6xl font-black italic text-stroke-heavy drop-shadow-hard mb-10"
+                        style={{ 
+                            fontFamily: selectedFont.family,
+                            color: titleFill,
+                            textShadow: `4px 4px 0 ${titleShadow}`
+                        }}
+                       >
                          CONTACT ME
                        </h3>
                        
-                       <div className="flex items-center justify-center gap-10 w-full max-w-lg pointer-events-auto mb-6">
+                       <div className="flex items-center justify-center gap-16 w-full mb-10">
                          {data.qrCodeQQ && (
-                           <div className="relative group">
-                               <div className="absolute -inset-2 bg-black/20 translate-y-2 translate-x-2"></div>
-                               <div className="absolute -inset-1 rotate-3" style={{ backgroundColor: theme.primary }}></div>
-                               <div className="relative bg-white p-2 border-2" style={{ borderColor: theme.secondary }}>
-                                   <div className="w-32 h-32 relative">
-                                       <img src={data.qrCodeQQ} alt="QQ" className="w-full h-full object-contain" />
-                                       <div className="absolute top-0 left-0 w-3 h-3 border-t-4 border-l-4" style={{ borderColor: theme.secondary }}></div>
-                                       <div className="absolute top-0 right-0 w-3 h-3 border-t-4 border-r-4" style={{ borderColor: theme.secondary }}></div>
-                                       <div className="absolute bottom-0 left-0 w-3 h-3 border-b-4 border-l-4" style={{ borderColor: theme.secondary }}></div>
-                                       <div className="absolute bottom-0 right-0 w-3 h-3 border-b-4 border-r-4" style={{ borderColor: theme.secondary }}></div>
-                                   </div>
+                           <div className="relative group bg-white p-4 border-4 border-black shadow-hard transform rotate-2 hover:rotate-0 transition-transform">
+                               <div className="w-32 h-32">
+                                   <img src={data.qrCodeQQ} alt="QQ" className="w-full h-full object-contain" />
                                </div>
-                               <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-1 text-sm font-black italic tracking-widest border-2 shadow-[2px_2px_0px_rgba(0,0,0,0.2)]"
-                                    style={{ backgroundColor: theme.secondary, color: theme.primary, borderColor: theme.text }}>
-                                 QQ
-                               </div>
+                               <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-black text-white px-4 py-1 font-black text-sm border-2 border-white">QQ</div>
                            </div>
                          )}
 
                          {data.qrCodeWeChat && (
-                           <div className="relative group">
-                               <div className="absolute -inset-2 bg-black/20 translate-y-2 translate-x-2"></div>
-                               <div className="absolute -inset-1 -rotate-2" style={{ backgroundColor: theme.accent }}></div>
-                               <div className="relative bg-white p-2 border-2" style={{ borderColor: theme.secondary }}>
-                                   <div className="w-32 h-32 relative">
-                                       <img src={data.qrCodeWeChat} alt="WX" className="w-full h-full object-contain" />
-                                       <div className="absolute top-0 left-0 w-3 h-3 border-t-4 border-l-4" style={{ borderColor: theme.secondary }}></div>
-                                       <div className="absolute top-0 right-0 w-3 h-3 border-t-4 border-r-4" style={{ borderColor: theme.secondary }}></div>
-                                       <div className="absolute bottom-0 left-0 w-3 h-3 border-b-4 border-l-4" style={{ borderColor: theme.secondary }}></div>
-                                       <div className="absolute bottom-0 right-0 w-3 h-3 border-b-4 border-r-4" style={{ borderColor: theme.secondary }}></div>
-                                   </div>
+                           <div className="relative group bg-white p-4 border-4 border-black shadow-hard transform -rotate-2 hover:rotate-0 transition-transform">
+                               <div className="w-32 h-32">
+                                   <img src={data.qrCodeWeChat} alt="WX" className="w-full h-full object-contain" />
                                </div>
-                               <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-1 text-sm font-black italic tracking-widest border-2 shadow-[2px_2px_0px_rgba(0,0,0,0.2)]"
-                                    style={{ backgroundColor: theme.secondary, color: theme.accent, borderColor: theme.text }}>
-                                 WECHAT
-                               </div>
+                               <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-black text-white px-4 py-1 font-black text-sm border-2 border-white">WECHAT</div>
                            </div>
                          )}
                        </div>
 
-                       <div className="mt-4 flex items-center gap-0 pointer-events-auto shadow-lg">
-                          <span className="font-black text-sm px-4 py-2 border-y-2 border-l-2" 
-                                style={{ 
-                                  backgroundColor: theme.secondary, 
-                                  color: theme.text,
-                                  borderColor: theme.secondary
-                                }}>
-                            更多例图请私信查看
-                          </span>
-                          <span className="text-xl font-black px-4 py-1 border-2 italic tracking-tighter" 
-                                style={{ 
-                                  backgroundColor: '#fff', 
-                                  color: theme.primary,
-                                  borderColor: theme.secondary
-                                }}>
-                            {data.contactInfo}
-                          </span>
+                       <div className="bg-[var(--color-accent)] text-black px-16 py-4 text-4xl font-black italic border-4 border-black shadow-hard font-dohna transform -rotate-1 hover:scale-105 transition-transform">
+                          {data.contactInfo}
                        </div>
                    </div>
                 </div>
              </div>
            )}
+        </div>
+        
+        {/* Footer Bar */}
+        <div className="h-8 w-full bg-black flex items-center justify-center overflow-hidden border-t-8 border-black">
+            <div className="text-xs text-[var(--color-accent)] font-mono whitespace-nowrap font-black tracking-[0.5em]">
+               DOHNA DOHNA DOHNA DOHNA DOHNA DOHNA DOHNA DOHNA DOHNA DOHNA DOHNA DOHNA DOHNA DOHNA
+            </div>
         </div>
       </div>
     </div>

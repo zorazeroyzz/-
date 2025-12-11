@@ -1,73 +1,74 @@
-import { ThemeColors } from './types';
+
+import { ThemeColors, CommissionData } from './types';
 
 export const THEMES: Record<string, ThemeColors> = {
   pink: {
-    primary: '#ff0055', // Hot Pink
-    secondary: '#1a1a1a', // Near Black
-    accent: '#00ffcc', // Cyan (Clash)
-    text: '#ffffff',
-    bg: '#121212',
-    gradient: 'linear-gradient(135deg, #ff0055 0%, #ff00aa 100%)'
+    color1: '#e6007a', // Hot Pink
+    color2: '#0099dd', // Cyan Blue
+    color3: '#ffe600', // Yellow
+    bg: '#000000',
+    pattern: 'pattern-dots'
   },
   yellow: {
-    primary: '#ffcc00', // Cyber Yellow
-    secondary: '#000000', // Pure Black
-    accent: '#ff0055', // Hot Pink (Clash)
-    text: '#ffffff',
-    bg: '#1a1a1a',
-    gradient: 'linear-gradient(135deg, #ffcc00 0%, #ffaa00 100%)'
+    color1: '#ffe600', // Yellow
+    color2: '#e6007a', // Pink
+    color3: '#0099dd', // Blue
+    bg: '#1a1a00',
+    pattern: 'pattern-stripes'
   },
   blue: {
-    primary: '#00aaff', // Electric Blue
-    secondary: '#050514', // Deep Navy
-    accent: '#ffcc00', // Yellow (Clash)
-    text: '#ffffff',
-    bg: '#0a0a1a',
-    gradient: 'linear-gradient(135deg, #00aaff 0%, #0055ff 100%)'
-  },
-  red: {
-    primary: '#ff3333', // Warning Red
-    secondary: '#1a0505', // Deep Red/Black
-    accent: '#ffffff', // White
-    text: '#ffffff',
-    bg: '#000000',
-    gradient: 'linear-gradient(135deg, #ff3333 0%, #990000 100%)'
-  },
-  purple: {
-    primary: '#bf00ff', // Neon Purple
-    secondary: '#1a002e', // Deep Purple
-    accent: '#39ff14', // Acid Green (EVA Unit 01 Vibe)
-    text: '#ffffff',
-    bg: '#0f0518',
-    gradient: 'linear-gradient(135deg, #bf00ff 0%, #7700ff 100%)'
+    color1: '#0099dd', // Blue
+    color2: '#ffe600', // Yellow
+    color3: '#e6007a', // Pink
+    bg: '#000a1a',
+    pattern: 'pattern-grid'
   },
   green: {
-    primary: '#39ff14', // Acid Green
-    secondary: '#000000', // Black
-    accent: '#ff00ff', // Magenta (Toxic Glitch Vibe)
-    text: '#ffffff',
+    color1: '#39ff14', // Acid Green
+    color2: '#bf00ff', // Purple
+    color3: '#ff0055', // Red
     bg: '#051a05',
-    gradient: 'linear-gradient(135deg, #39ff14 0%, #005500 100%)'
+    pattern: 'pattern-checkers'
   },
-  cyan: {
-    primary: '#00ffff', // Cyan
-    secondary: '#1a001a', // Deep Magenta Background
-    accent: '#ff00ff', // Magenta (Vapor/Glitch Vibe)
-    text: '#ffffff',
-    bg: '#001a1a',
-    gradient: 'linear-gradient(135deg, #00ffff 0%, #ff00ff 100%)'
+  red: {
+    color1: '#ff2a2a', // Red
+    color2: '#00ffff', // Cyan
+    color3: '#ffffff', // White
+    bg: '#1a0505',
+    pattern: 'pattern-spikes'
   },
-  orange: {
-    primary: '#ff6600', // Safety Orange
-    secondary: '#0f172a', // Slate Blue
-    accent: '#00ffff', // Cyan (Industrial Vibe)
-    text: '#ffffff',
-    bg: '#1a0a00',
-    gradient: 'linear-gradient(135deg, #ff6600 0%, #ff3300 100%)'
+  purple: {
+    color1: '#bf00ff', // Purple
+    color2: '#39ff14', // Green
+    color3: '#00ffff', // Cyan
+    bg: '#1a002e',
+    pattern: 'pattern-hypno'
   }
 };
 
-export const DEFAULT_DATA = {
+export const FONT_OPTIONS = [
+  { id: 'russo', name: 'RUSSO (Mecha)', family: '"Russo One", sans-serif' },
+  { id: 'mochiy', name: 'MOCHIY (Pop)', family: '"Mochiy Pop One", sans-serif' },
+  { id: 'glitch', name: 'GLITCH (Cyber)', family: '"Rubik Glitch", system-ui' },
+  { id: 'bangers', name: 'BANGERS (Comic)', family: '"Bangers", system-ui' },
+  { id: 'marker', name: 'MARKER (Street)', family: '"Permanent Marker", cursive' },
+  { id: 'zcool', name: 'KUAILE (Fun)', family: '"ZCOOL KuaiLe", sans-serif' },
+  { id: 'mashan', name: 'MASHAN (Brush)', family: '"Ma Shan Zheng", cursive' },
+  { id: 'pixel', name: 'PIXEL (Retro)', family: '"Press Start 2P", cursive' },
+];
+
+export const DOHNA_COLORS = [
+  { id: 'white', value: '#ffffff', name: 'WHITE' },
+  { id: 'black', value: '#000000', name: 'BLACK' },
+  { id: 'pink', value: '#e6007a', name: 'PINK' },
+  { id: 'cyan', value: '#0099dd', name: 'CYAN' },
+  { id: 'yellow', value: '#ffe600', name: 'YELLOW' },
+  { id: 'green', value: '#39ff14', name: 'ACID' },
+  { id: 'purple', value: '#bf00ff', name: 'PURPLE' },
+  { id: 'red', value: '#ff2a2a', name: 'RED' },
+];
+
+export const DEFAULT_DATA: CommissionData = {
   photographerName: "摄氏零度",
   slogan: "次元壁突破 // SHUTTER BREAK",
   tags: ["日系", "赛博朋克", "情绪", "暗黑"],
@@ -77,8 +78,8 @@ export const DEFAULT_DATA = {
     { id: '2', title: '外景正片 // LOCATION', price: '1200r', desc: '20张精修 / 包含排版 / 1-2h拍摄' },
     { id: '3', title: '棚拍企划 // STUDIO', price: '1500r', desc: '布光设计 / 后期合成 / 提供道具' },
   ],
-  exhibitionImages: [], // Now ImageItem[]
-  mainImages: [],       // Now ImageItem[]
+  exhibitionImages: [], 
+  mainImages: [],       
   avatar: "",
   
   // Position Defaults
@@ -102,14 +103,19 @@ export const DEFAULT_DATA = {
   contactBackgroundScale: 1,
 
   notice: "1. 跑单不退定金，改期请提前3天。\n2. 包往返路费/门票。\n3. 工期2-3周，加急x1.5。\n4. 默认可展示，买断x2。",
-  themeColor: 'pink' as const,
+  themeColor: 'pink',
+  titleFont: 'russo',
+  titleColor: '#ffffff',     // Default White
+  titleColorSecondary: '',   // Default None
+  titleShadowColor: 'auto',  // Default Auto (Theme Color)
+  
   showPortfolio: true,
   showPricing: true,
   showNotice: true,
   showContact: true,
   
   // Default Spacing (px)
-  spacingHeader: 0,     // Bottom padding of header
+  spacingHeader: 0,     
   spacingPortfolio: 32,
   spacingPricing: 32,
   spacingNotice: 32,
