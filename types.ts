@@ -57,6 +57,7 @@ export interface CommissionData {
   showPricing: boolean;
   showNotice: boolean;
   showContact: boolean;
+  showContactInfo: boolean; // Control visibility of the text ID bar
 
   // Spacing controls
   spacingHeader: number;      

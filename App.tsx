@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { CommissionData, PricingItem, ImageItem, Preset } from './types';
 import { DEFAULT_DATA, THEMES, FONT_OPTIONS, DOHNA_COLORS } from './constants';
@@ -153,26 +154,79 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Handlers ---
-  const handleInputChange = (field: keyof CommissionData, value: any) => {
+  // --- Handlers (Optimized with useCallback) ---
+  const handleInputChange = useCallback((field: keyof CommissionData, value: any) => {
     setData(prev => ({ ...prev, [field]: value }));
-  };
+  }, []);
 
-  const handlePosChange = (id: string, pos: {x: number, y: number}) => {
-    if (id === 'avatar') setData(prev => ({ ...prev, avatarPosition: pos }));
-    if (id === 'status') setData(prev => ({ ...prev, statusPosition: pos }));
-    if (id === 'title') setData(prev => ({ ...prev, titlePosition: pos }));
-    if (id === 'slogan') setData(prev => ({ ...prev, sloganPosition: pos }));
-    if (id === 'tags') setData(prev => ({ ...prev, tagsPosition: pos }));
-    if (id === 'contactBg') setData(prev => ({ ...prev, contactBackgroundPosition: pos }));
-  }
+  const handlePosChange = useCallback((id: string, pos: {x: number, y: number}) => {
+    setData(prev => {
+      if (id === 'avatar' && prev.avatarPosition.x === pos.x && prev.avatarPosition.y === pos.y) return prev;
+      let update = {};
+      if (id === 'avatar') update = { avatarPosition: pos };
+      if (id === 'status') update = { statusPosition: pos };
+      if (id === 'title') update = { titlePosition: pos };
+      if (id === 'slogan') update = { sloganPosition: pos };
+      if (id === 'tags') update = { tagsPosition: pos };
+      if (id === 'contactBg') update = { contactBackgroundPosition: pos };
+      return { ...prev, ...update };
+    });
+  }, []);
 
-  const handleScaleChange = (id: string, scale: number) => {
-    if (id === 'avatar') setData(prev => ({ ...prev, avatarScale: scale }));
-    if (id === 'status') setData(prev => ({ ...prev, statusScale: scale }));
-    if (id === 'contactBg') setData(prev => ({ ...prev, contactBackgroundScale: scale }));
-  }
+  const handleScaleChange = useCallback((id: string, scale: number) => {
+    setData(prev => {
+      let update = {};
+      if (id === 'avatar') update = { avatarScale: scale };
+      if (id === 'status') update = { statusScale: scale };
+      if (id === 'contactBg') update = { contactBackgroundScale: scale };
+      return { ...prev, ...update };
+    });
+  }, []);
 
+  const handleImageUpdate = useCallback((targetList: 'exhibitionImages' | 'mainImages', index: number, updates: Partial<ImageItem>) => {
+    setData(prev => {
+      const newList = [...prev[targetList]];
+      newList[index] = { ...newList[index], ...updates };
+      return { ...prev, [targetList]: newList };
+    });
+  }, []);
+
+  const toggleSection = useCallback((field: keyof CommissionData) => {
+    setData(prev => ({ ...prev, [field]: !prev[field] }));
+  }, []);
+
+  const removeImage = useCallback((index: number, targetList: 'exhibitionImages' | 'mainImages') => {
+    setData(prev => ({
+      ...prev,
+      [targetList]: prev[targetList].filter((_, i) => i !== index)
+    }));
+  }, []);
+
+  const addPricingItem = useCallback(() => {
+    const newItem: PricingItem = {
+      id: Date.now().toString(),
+      title: 'NEW ITEM',
+      price: '0000',
+      desc: 'Description...'
+    };
+    setData(prev => ({ ...prev, pricing: [...prev.pricing, newItem] }));
+  }, []);
+
+  const updatePricing = useCallback((id: string, field: keyof PricingItem, value: string) => {
+    setData(prev => ({
+      ...prev,
+      pricing: prev.pricing.map(item => item.id === id ? { ...item, [field]: value } : item)
+    }));
+  }, []);
+
+  const removePricing = useCallback((id: string) => {
+    setData(prev => ({
+      ...prev,
+      pricing: prev.pricing.filter(item => item.id !== id)
+    }));
+  }, []);
+
+  // --- File Handlers ---
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -238,45 +292,6 @@ const App: React.FC = () => {
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  const removeImage = (index: number, targetList: 'exhibitionImages' | 'mainImages') => {
-    setData(prev => ({
-      ...prev,
-      [targetList]: prev[targetList].filter((_, i) => i !== index)
-    }));
-  };
-
-  const handleImageUpdate = (targetList: 'exhibitionImages' | 'mainImages', index: number, updates: Partial<ImageItem>) => {
-    setData(prev => {
-      const newList = [...prev[targetList]];
-      newList[index] = { ...newList[index], ...updates };
-      return { ...prev, [targetList]: newList };
-    });
-  };
-
-  const addPricingItem = () => {
-    const newItem: PricingItem = {
-      id: Date.now().toString(),
-      title: 'NEW ITEM',
-      price: '0000',
-      desc: 'Description...'
-    };
-    setData(prev => ({ ...prev, pricing: [...prev.pricing, newItem] }));
-  };
-
-  const updatePricing = (id: string, field: keyof PricingItem, value: string) => {
-    setData(prev => ({
-      ...prev,
-      pricing: prev.pricing.map(item => item.id === id ? { ...item, [field]: value } : item)
-    }));
-  };
-
-  const removePricing = (id: string) => {
-    setData(prev => ({
-      ...prev,
-      pricing: prev.pricing.filter(item => item.id !== id)
-    }));
   };
 
   // --- Preset Manager Functions ---
@@ -367,9 +382,6 @@ const App: React.FC = () => {
     }
   }, [data.photographerName, activeTab]);
 
-  const toggleSection = (field: keyof CommissionData) => {
-    setData(prev => ({ ...prev, [field]: !prev[field] }));
-  }
 
   const SectionHeader = ({ title, colorClass, field }: { title: string, colorClass: string, field?: keyof CommissionData }) => (
     <h2 className={`text-lg font-black italic uppercase border-b-2 border-current pb-1 mb-4 flex items-center justify-between font-dohna tracking-wider`} style={{ color: colorClass }}>
@@ -808,7 +820,10 @@ const App: React.FC = () => {
 
              {data.showNotice && (
                <div className="mb-4">
-                  <label className="text-[10px] font-black mb-1 block" style={{ color: theme.color3 }}>WARNING TEXT</label>
+                  <label className="text-[10px] font-black mb-1 block flex justify-between items-center" style={{ color: theme.color3 }}>
+                    <span>WARNING TEXT</span>
+                    <button onClick={() => toggleSection('showNotice')} className="text-red-500 text-[10px]">HIDE</button>
+                  </label>
                   <textarea 
                     value={data.notice}
                     onChange={(e) => handleInputChange('notice', e.target.value)}
@@ -905,13 +920,20 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="mt-2">
-                        <label className="block text-[10px] font-black text-white mb-1">DISPLAY ID</label>
-                        <input 
-                           type="text" 
-                           value={data.contactInfo} 
-                           onChange={(e) => handleInputChange('contactInfo', e.target.value)}
-                           className="w-full dohna-input text-center"
-                         />
+                        <label className="block text-[10px] font-black text-white mb-1 flex justify-between items-center">
+                           <span>DISPLAY ID</span>
+                           <button onClick={() => toggleSection('showContactInfo')} className={data.showContactInfo ? "text-white hover:text-[var(--color-accent)]" : "text-gray-500"}>
+                              {data.showContactInfo ? "HIDE" : "SHOW"}
+                           </button>
+                        </label>
+                        {data.showContactInfo && (
+                           <input 
+                             type="text" 
+                             value={data.contactInfo} 
+                             onChange={(e) => handleInputChange('contactInfo', e.target.value)}
+                             className="w-full dohna-input text-center"
+                           />
+                        )}
                     </div>
                   </div>
              )}
@@ -938,6 +960,7 @@ const App: React.FC = () => {
             onPosChange={handlePosChange}
             onImageUpdate={handleImageUpdate}
             onScaleChange={handleScaleChange}
+            onToggleVisibility={toggleSection}
           />
         </div>
       </div>

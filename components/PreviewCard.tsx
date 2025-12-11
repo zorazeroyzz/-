@@ -2,7 +2,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { CommissionData, ThemeColors, ImageItem } from '../types';
 import { THEMES, FONT_OPTIONS } from '../constants';
-import { AlertTriangle, ZoomIn, Camera, Star, Zap, Heart, Crosshair, Skull, Radio, Activity, Hexagon, Eye, QrCode } from 'lucide-react';
+import { AlertTriangle, ZoomIn, Camera, Star, Zap, Heart, Crosshair, Skull, Radio, Activity, Hexagon, Eye, QrCode, X } from 'lucide-react';
 
 interface PreviewCardProps {
   data: CommissionData;
@@ -11,6 +11,7 @@ interface PreviewCardProps {
   onPosChange: (id: string, pos: {x: number, y: number}) => void;
   onImageUpdate: (list: 'exhibitionImages' | 'mainImages', index: number, updates: Partial<ImageItem>) => void;
   onScaleChange: (id: string, scale: number) => void;
+  onToggleVisibility: (field: keyof CommissionData) => void;
 }
 
 interface EditableImageProps {
@@ -406,13 +407,14 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
         </div>
 
         {/* The visual image */}
-        <div className="w-full h-full bg-gray-200"> 
+        <div className="w-full h-full bg-gray-200 overflow-hidden"> 
             <img 
               src={item.url} 
-              className="w-full h-full object-cover block cursor-move relative z-10 origin-center will-change-transform" 
+              className="w-full h-full object-cover block cursor-move relative z-10 origin-center" 
               alt="Portfolio" 
               style={{ 
-                transform: `translate(${localState.x}px, ${localState.y}px) scale(${localState.scale})`,
+                transform: `translate3d(${localState.x}px, ${localState.y}px, 0) scale(${localState.scale})`,
+                backfaceVisibility: 'hidden',
                 transition: isDragging ? 'none' : 'transform 0.1s ease-out'
               }}
               onMouseDown={handleStart}
@@ -424,7 +426,7 @@ const EditableImage: React.FC<EditableImageProps> = React.memo(({
   );
 });
 
-const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, onPosChange, onImageUpdate, onScaleChange }) => {
+const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, onPosChange, onImageUpdate, onScaleChange, onToggleVisibility }) => {
   // SAFETY: Default to pink theme if data.themeColor is undefined or invalid
   const theme = THEMES[data.themeColor] || THEMES.pink;
   
@@ -497,7 +499,8 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
   const ImageGrid = React.useMemo(() => ({ images, listType, title, borderColor }: { images: ImageItem[], listType: 'exhibitionImages' | 'mainImages', title: string, borderColor: string }) => (
     <div className="mb-6 relative">
       <div className="flex items-center gap-2 mb-2 pl-2 border-l-8" style={{ borderColor: borderColor }}>
-        <h4 className="text-2xl font-black italic text-black font-dohna" style={{ color: borderColor, textShadow: '1px 1px 0 #000' }}>
+        {/* Removed font-bold to prevent blurring with ZCOOL KuaiLe which is already thick */}
+        <h4 className="text-2xl text-black font-dohna" style={{ color: borderColor, textShadow: '1px 1px 0 #000' }}>
             {title}
         </h4>
         <div className="flex-1 h-0.5 bg-black"></div>
@@ -553,11 +556,11 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
               onMouseDown={(e) => handleHeaderStart(e, 'title')}
               onTouchStart={(e) => handleHeaderStart(e, 'title')}
             >
-              <h1 className="text-[6.5rem] leading-none font-black italic relative z-10 w-full text-center text-stroke-heavy tracking-tighter"
+              <h1 className="text-[6.5rem] leading-none font-bold italic relative z-10 w-full text-center text-stroke-heavy tracking-tighter"
                   style={{ 
                     // Parent color is fallback or used for stroke context
                     color: titleFill, 
-                    dropShadow: `8px 8px 0 ${titleShadow}`,
+                    textShadow: `8px 8px 0 ${titleShadow}`,
                     fontFamily: selectedFont.family,
                   }}>
                   <span className="relative inline-block" style={{ transform: 'skewX(-10deg)' }}>
@@ -651,7 +654,7 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
               onTouchStart={(e) => handleHeaderStart(e, 'slogan')}
             >
               <div className="bg-black text-white px-10 py-3 transform skew-x-[-12deg] border-4 border-white shadow-hard" style={{ backgroundColor: '#000' }}>
-                 <p className="text-3xl font-black font-dohna tracking-wider transform skew-x-[12deg]">
+                 <p className="text-3xl font-bold font-dohna tracking-wider transform skew-x-[12deg]">
                     {data.slogan} <span className="text-[var(--color-accent)]">//</span>
                  </p>
               </div>
@@ -664,16 +667,24 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
               onMouseDown={(e) => handleHeaderStart(e, 'tags')}
               onTouchStart={(e) => handleHeaderStart(e, 'tags')}
             >
-               <div className="flex flex-wrap gap-4 justify-center max-w-xl">
-                  {data.tags.map((tag, i) => (
-                    <div key={i} className="relative group hover:-translate-y-1 transition-transform">
-                        <div className="absolute inset-0 bg-black translate-x-1 translate-y-1"></div>
-                        <span 
-                          className="relative block px-6 py-1 font-black text-xl border-4 border-black bg-white text-black font-dohna">
-                          #{tag}
-                        </span>
-                    </div>
-                  ))}
+               <div className="flex items-center gap-2 justify-center w-full px-4">
+                  {/* Label: Forced to row with tags */}
+                  <span className="text-3xl font-bold font-dohna text-white italic shrink-0 text-stroke-md drop-shadow-[2px_2px_0_#000] mr-2">
+                    互勉列表：
+                  </span>
+
+                  {/* Tags: Forced to one row (nowrap) */}
+                  <div className="flex flex-nowrap gap-4 items-center">
+                      {data.tags.map((tag, i) => (
+                        <div key={i} className="relative group hover:-translate-y-1 transition-transform shrink-0">
+                            <div className="absolute inset-0 bg-black translate-x-1 translate-y-1"></div>
+                            <span 
+                              className="relative block px-6 py-1 font-bold text-xl border-4 border-black bg-white text-black font-dohna whitespace-nowrap">
+                              #{tag}
+                            </span>
+                        </div>
+                      ))}
+                  </div>
                </div>
             </div>
         </div>
@@ -704,7 +715,7 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
              <div className="relative" style={{ marginBottom: `${data.spacingPricing}px` }}>
                 <div className="flex items-center justify-between border-b-8 border-black mb-8 pb-2">
                    <h3 
-                    className="text-5xl font-black italic text-black tracking-tighter text-stroke-md drop-shadow-[4px_4px_0_#000]"
+                    className="text-5xl font-bold italic text-black tracking-tighter text-stroke-md drop-shadow-[4px_4px_0_#000]"
                     style={{ 
                         fontFamily: selectedFont.family,
                         color: titleFill, // Also apply custom color here for consistency
@@ -728,7 +739,8 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                         
                         <div className="flex-1 p-5 flex items-center justify-between">
                             <div>
-                               <h4 className="text-3xl font-black italic text-black uppercase font-dohna">{item.title}</h4>
+                               {/* Removed italic */}
+                               <h4 className="text-3xl font-bold text-black uppercase font-dohna">{item.title}</h4>
                                <div className="flex items-center gap-2 mt-2">
                                   <Zap size={16} fill="#ffe600" className="text-black" />
                                   <p className="font-bold text-base text-black bg-gray-100 px-3 py-0.5 border-2 border-black rounded-sm">
@@ -739,7 +751,7 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                             
                             <div className="relative">
                                <div className="bg-black text-white px-6 py-2 transform -rotate-3 border-4 border-white shadow-hard-sm">
-                                  <span className="text-3xl font-black italic font-dohna text-[var(--color-accent)]">{item.price}</span>
+                                  <span className="text-3xl font-bold italic font-dohna text-[var(--color-accent)]">{item.price}</span>
                                 </div>
                             </div>
                         </div>
@@ -751,19 +763,28 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
 
            {/* 3. NOTICE */}
            {data.showNotice && (
-             <div className="relative" style={{ marginBottom: `${data.spacingNotice}px` }}>
+             <div className="relative group/notice" style={{ marginBottom: `${data.spacingNotice}px` }}>
                 {/* Explicit Yellow/Black Theme for Warning Section */}
                 <div className="bg-black border-4 p-2 relative shadow-hard" style={{ borderColor: '#ffe600' }}>
+                   {/* CLOSE BUTTON */}
+                   <button 
+                     onClick={(e) => { e.stopPropagation(); onToggleVisibility('showNotice'); }}
+                     className="absolute top-2 right-2 text-black bg-[#ffe600] z-20 opacity-0 group-hover/notice:opacity-100 transition-opacity p-1 border-2 border-black hover:bg-white"
+                     title="Hide Section"
+                   >
+                      <X size={16} strokeWidth={3} />
+                   </button>
+
                    <div className="border-4 border-dashed p-6" style={{ borderColor: '#ffe600' }}>
                       <div className="flex items-center gap-3 border-b-4 pb-4 mb-4" style={{ borderColor: '#ffe600' }}>
                          <AlertTriangle size={48} fill="#ffe600" className="text-black flex-shrink-0" strokeWidth={2.5} />
-                         <h3 className="text-3xl font-black italic text-[#ffe600]">IMPORTANT NOTICE // 须知</h3>
+                         {/* Removed italic */}
+                         <h3 className="text-3xl font-bold text-[#ffe600]">IMPORTANT NOTICE // 须知</h3>
                       </div>
                       <div className="font-bold text-lg leading-relaxed text-[#ffe600] whitespace-pre-line font-mono">
                          {data.notice || "NO CONTENT"}
                       </div>
                    </div>
-                   {/* Decorative corner removed */}
                 </div>
              </div>
            )}
@@ -792,8 +813,9 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                    )}
 
                    <div className="relative z-10 w-full flex flex-col items-center">
+                       {/* Removed italic */}
                        <h3 
-                        className="text-6xl font-black italic text-stroke-heavy drop-shadow-hard mb-10"
+                        className="text-6xl font-bold text-stroke-heavy drop-shadow-hard mb-10"
                         style={{ 
                             fontFamily: selectedFont.family,
                             color: titleFill,
@@ -809,7 +831,7 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                                <div className="w-32 h-32">
                                    <img src={data.qrCodeQQ} alt="QQ" className="w-full h-full object-contain" />
                                </div>
-                               <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-black text-white px-4 py-1 font-black text-sm border-2 border-white">QQ</div>
+                               <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-black text-white px-4 py-1 font-bold text-sm border-2 border-white">QQ</div>
                            </div>
                          )}
 
@@ -818,14 +840,25 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
                                <div className="w-32 h-32">
                                    <img src={data.qrCodeWeChat} alt="WX" className="w-full h-full object-contain" />
                                </div>
-                               <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-black text-white px-4 py-1 font-black text-sm border-2 border-white">WECHAT</div>
+                               <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-black text-white px-4 py-1 font-bold text-sm border-2 border-white">WECHAT</div>
                            </div>
                          )}
                        </div>
 
-                       <div className="bg-[var(--color-accent)] text-black px-16 py-4 text-4xl font-black italic border-4 border-black shadow-hard font-dohna transform -rotate-1 hover:scale-105 transition-transform">
-                          {data.contactInfo}
-                       </div>
+                       {data.showContactInfo && (
+                           <div className="relative group/info transform -rotate-1 hover:scale-105 transition-transform hover:z-50">
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); onToggleVisibility('showContactInfo'); }}
+                                    className="absolute -top-3 -right-3 bg-black text-white rounded-full p-1 border-2 border-white hover:bg-red-500 opacity-0 group-hover/info:opacity-100 transition-opacity z-50 shadow-sm"
+                                    title="Hide Display ID"
+                                >
+                                    <X size={12} strokeWidth={3} />
+                                </button>
+                                <div className="bg-[var(--color-accent)] text-black px-16 py-4 text-4xl font-bold italic border-4 border-black shadow-hard font-dohna">
+                                    {data.contactInfo}
+                                </div>
+                           </div>
+                       )}
                    </div>
                 </div>
              </div>

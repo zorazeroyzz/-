@@ -113,6 +113,7 @@ export const DEFAULT_DATA: CommissionData = {
   showPricing: true,
   showNotice: true,
   showContact: true,
+  showContactInfo: true,
   
   // Default Spacing (px)
   spacingHeader: 0,     
