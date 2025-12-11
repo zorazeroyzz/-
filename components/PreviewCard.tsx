@@ -23,7 +23,8 @@ interface EditableImageProps {
 }
 
 // --- DOHNA MOTION BACKGROUND (REMASTERED) ---
-const DohnaMotionBackground: React.FC<{ theme: ThemeColors, themeName: string }> = ({ theme, themeName }) => {
+// UPDATED: Wrapped in React.memo to drastically reduce lag when dragging other elements.
+const DohnaMotionBackground = React.memo(({ theme, themeName }: { theme: ThemeColors, themeName: string }) => {
   
   // 1. Precise Color Logic for High Contrast
   const colors = useMemo(() => {
@@ -284,7 +285,7 @@ const DohnaMotionBackground: React.FC<{ theme: ThemeColors, themeName: string }>
       <div className="absolute inset-0 shadow-[inset_0_0_150px_rgba(0,0,0,0.25)] pointer-events-none"></div>
     </div>
   );
-};
+});
 
 
 // Optimized Image Component with Local State
@@ -544,6 +545,7 @@ const PreviewCard: React.FC<PreviewCardProps> = ({ data, innerRef, scaleFactor, 
         } as React.CSSProperties}
       >
         {/* === NEW DOHNA MOTION BACKGROUND (REMASTERED) === */}
+        {/* React.memo applied above ensures this doesn't re-render on drag unless theme changes */}
         <DohnaMotionBackground theme={theme} themeName={data.themeColor} />
 
         {/* === HEADER AREA === */}
